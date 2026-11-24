@@ -119,6 +119,9 @@ function cameraText(c) {
   return 'x '+c.x.toFixed(3)+' m, y '+c.y.toFixed(3)+' m, wysokość '+c.height.toFixed(2)+
     ' m · obrót '+deg(c.yaw)+'° · pochylenie '+deg(c.pitch)+'° · pionowe FOV '+c.verticalFov+'° · '+$('aspect').selectedOptions[0].textContent;
 }
+function formatEV(ev) {
+  return (ev>0?'+':'')+ev.toFixed(2)+' EV';
+}
 function summaryText() {
   const lights=lightDefinitions.filter(([key])=>state.lights[key].on).map(([key,label])=>
     label+' ('+Math.round(state.lights[key].intensity*100)+'%, '+state.lights[key].kelvin+' K)');
@@ -129,6 +132,8 @@ function summaryText() {
     state.name+' · Yrliet Apartment '+VERSION+' · Nowy Kleparz, Kraków',
     'Pora: '+formatTime(state.timeOfDay)+
       (state.perspective==='independent'?'':' · Zapisany aparat niezależny: '+cameraText(state.camera)),
+    'Ekspozycja: '+(state.exposure.automatic?'automatyczna':'ręczna')+
+      ' · ustawienie '+formatEV(state.exposure.ev)+' · zastosowano '+formatEV(appliedExposure(state)),
     'Światła: '+(lights.join(', ')||'wyłączone'),
     'Otwarte drzwi: '+list(state.doors,Object.fromEntries(doorDefinitions.map(([key,label])=>[key,label])),true),
     'Otwarte okna: '+list(state.windows,windowNames,true)+' · zasłonięte okna: '+list(state.curtains,windowNames,true),
@@ -178,6 +183,7 @@ function draw() {
   $('clock').textContent=formatTime(state.timeOfDay);
   $('ev').textContent=effectiveCamera(state).height.toFixed(2)+' m';
   $('fv').textContent=state.camera.verticalFov+'°';
+  $('exposureValue').textContent=formatEV(state.exposure.ev);
 }
 function jump(camera) {
   if(blocked(camera.x,camera.y,state,camera.seatedOnSofa && onSofa(camera))){
@@ -277,6 +283,12 @@ for(const [id,field] of [['eye','height'],['fov','verticalFov']]){
 }
 $('light').oninput=()=>{state.timeOfDay=Number($('light').value);refresh();};
 $('aspect').onchange=()=>{state.camera.framing=$('aspect').value;refresh();};
+$('exposure').oninput=()=>{state.exposure.ev=$('exposure').valueAsNumber;refresh();};
+$('autoExposure').onchange=()=>{state.exposure.automatic=$('autoExposure').checked;refresh();};
+$('resetExposure').onclick=()=>{
+  state.exposure={ev:0,automatic:false};
+  syncControls();refresh();
+};
 $('showGrid').onchange=()=>{state.camera.grid=$('showGrid').checked;refresh();};
 for(const [label,height] of [['Stojąca',1.65],['Siedząca',1.15],['Leżąca',.55]]){
   button($('heights'),label,()=>{state.camera.height=height;syncControls();refresh();});
@@ -411,6 +423,7 @@ $('resetFurniture').onclick=()=>place($('furniture').value,null);
 function syncControls() {
   const c=state.camera;
   $('eye').value=c.height;$('fov').value=c.verticalFov;$('aspect').value=c.framing;
+  $('exposure').value=state.exposure.ev;$('autoExposure').checked=state.exposure.automatic;
   $('showGrid').checked=c.grid;$('light').value=state.timeOfDay;$('sceneName').value=state.name;
   for(const [key,controls] of Object.entries(lightControls)){
     const l=state.lights[key];

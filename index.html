@@ -56,6 +56,9 @@
     <label>Wysokość <input id="eye" type="range" min=".3" max="2" step=".01"><output id="ev"></output></label>
     <label>Pionowe pole widzenia <input id="fov" type="range" min="30" max="100" step="1"><output id="fv"></output></label>
     <div id="heights"></div>
+    <label>Ekspozycja <input id="exposure" type="range" min="-2" max="2" step="any"><output id="exposureValue" for="exposure"></output></label>
+    <label><input id="autoExposure" type="checkbox"> Automatyczna ekspozycja</label>
+    <button id="resetExposure" type="button">Resetuj ekspozycję</button>
     <label>Kadr <select id="aspect"><option value="landscape">Poziomy 4:3</option><option value="portrait">Pionowy 3:4</option><option value="square">Kwadrat 1:1</option></select></label>
     <label><input id="showGrid" type="checkbox"> Siatka trójpodziału</label>
     <button id="save">Zapisz PNG</button>

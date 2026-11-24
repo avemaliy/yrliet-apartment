@@ -13,12 +13,49 @@ function doorAngle(key, axis, open) {
   return key === 'user' || key === 'bath' ? Math.PI : axis ? Math.PI/2 : 0;
 }
 
+function daylightAt(hour) {
+  if(hour<=5.5 || hour>=19.5) return {elevation:0,east:0,north:0};
+  const phase=(hour-5.5)*Math.PI/14;
+  const elevation=Math.sin(phase);
+  // The sun crosses the southern sky. North openings can catch grazing light
+  // early and late, but receive primarily diffuse courtyard light.
+  return {elevation, east:Math.max(0,Math.cos(phase)), north:Math.max(0,.38-.88*elevation)};
+}
+
+function windowTransmission(state,key) {
+  return state.curtains[key] ? .16 : 1;
+}
+
+function appliedExposure(state,c=effectiveCamera(state),day=daylightAt(state.timeOfDay).elevation) {
+  const {ev,automatic}=state.exposure;
+  if(!automatic) return ev;
+  const brightness=weatherProfiles[state.weather][3];
+  let daylight=0, artificial=0;
+  windows.forEach(({x,y,w,d},i)=>{
+    const key=Object.keys(windowNames)[i];
+    const distance=Math.hypot(c.x-x-w/2,c.y-y-d/2);
+    daylight+=windowTransmission(state,key)/(1+(distance/2.5)**2);
+  });
+  for(const [key,,x,y,z,,power,range] of lightDefinitions){
+    const {on,intensity}=state.lights[key];
+    if(!on) continue;
+    const distance=Math.hypot(c.x-x,c.y-y,c.height-z);
+    const falloff=Math.max(0,1-(distance/range)**4)**2;
+    artificial+=power*intensity*falloff/Math.max(1,distance**2);
+  }
+  const meter=day*brightness*(.4+daylight)+artificial*.16;
+  // Limit brightening to daylight so auto keeps unlit nighttime scenes dark.
+  const correction=Math.max(-.65,Math.min(.75*day,-Math.log2(Math.max(.15,meter))));
+  return Math.max(-2,Math.min(2,ev+correction));
+}
+
 function createApartment(canvas) {
   if (!window.THREE) throw new Error('Nie udało się załadować Three.js.');
   const T = window.THREE;
   const renderer = new T.WebGLRenderer({canvas, antialias:true});
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
   renderer.outputColorSpace = T.SRGBColorSpace;
+  renderer.toneMapping = T.LinearToneMapping;
   const scene = new T.Scene();
   scene.background = new T.Color();
   const fog = new T.FogExp2('#afcfdf',0);
@@ -45,8 +82,7 @@ function createApartment(canvas) {
   }
   const camera = new T.PerspectiveCamera(75,1,.035,58);
   const ambient = new T.HemisphereLight(0xe6edff,0x9b8065,1);
-  const sun = new T.DirectionalLight(0xffe6c0,1);
-  scene.add(ambient,sun);
+  scene.add(ambient);
   const materials = new Map();
   const cube = new T.BoxGeometry(1,1,1);
   let seed = 2101;
@@ -225,9 +261,9 @@ function createApartment(canvas) {
       }
     }
     drapes[key]=panels;
-    const light=new T.SpotLight('#e0eaff',0,7,Math.PI/3,.72,2);
-    light.position.set(east?7.88:x+w/2,1.86,east?y+d/2:.28);
-    light.target.position.set(east?6.4:x+w/2,.35,east?y+d/2:2);
+    const light=new T.SpotLight('#e0eaff',0,east?5.5:6.2,Math.PI/3,.8,2);
+    light.position.set(east?7.96:x+w/2,1.95,east?y+d/2:.19);
+    light.target.position.set(east?5.5:x+w/2,.4,east?y+d/2:2.7);
     scene.add(light,light.target);
     fills.push([key,light,east]);
   });
@@ -289,7 +325,10 @@ function createApartment(canvas) {
   const weatherColors=keyed(Object.keys(weatherProfiles),key=>new T.Color(weatherProfiles[key][1]));
   const nightSky=new T.Color('#172338'), duskSky=new T.Color('#bda3a0'), daySky=new T.Color('#afcfdf');
   const nightTint=new T.Color('#9bafd3'), dayTint=new T.Color('#e6edff');
-  const warmSun=new T.Color('#ffb47c'), coolSun=new T.Color('#fff2dc');
+  const warmSun=new T.Color('#ffd3a6');
+  const nightGround=new T.Color('#7a6d68'), dayGround=new T.Color('#c9b49b');
+  const snowGround=new T.Color('#e0e6ee');
+  const sky=new T.Color();
   const shadeMap=texture(64,(g,n)=>{
     const fade=g.createRadialGradient(n/2,n/2,2,n/2,n/2,n/2);
     fade.addColorStop(0,'rgba(28,23,19,.36)');
@@ -367,25 +406,35 @@ function createApartment(canvas) {
     camera.aspect=frames[c.framing];camera.fov=c.verticalFov;camera.updateProjectionMatrix();
     camera.position.set(c.x,c.height,c.y);
     camera.lookAt(c.x+Math.sin(c.yaw)*Math.cos(c.pitch),c.height+Math.sin(c.pitch),c.y-Math.cos(c.yaw)*Math.cos(c.pitch));
-    const day=Math.max(0,Math.sin((hour-5.5)*Math.PI/14));
-    const transit=Math.max(0,Math.min(1,(hour-5.5)/14));
-    if(day<.37) scene.background.copy(nightSky).lerp(duskSky,day/.37);
-    else scene.background.copy(duskSky).lerp(daySky,(day-.37)/.63);
+    const {elevation:day,east,north}=daylightAt(hour);
+    const exposure=2**appliedExposure(state,c,day);
+    renderer.toneMappingExposure=exposure;
+    if(day<.37) sky.copy(nightSky).lerp(duskSky,day/.37);
+    else sky.copy(duskSky).lerp(daySky,(day-.37)/.63);
     const [,,mix,brightness,density]=weatherProfiles[state.weather];
-    scene.background.lerp(weatherColors[state.weather],mix*(.25+.75*day));
+    sky.lerp(weatherColors[state.weather],mix*(.25+.75*day));
+    // Solid backgrounds and fog bypass Three's material tone mapping.
+    scene.background.setRGB(Math.min(1,sky.r*exposure),Math.min(1,sky.g*exposure),Math.min(1,sky.b*exposure));
     fog.color.copy(scene.background);fog.density=density;
     rain.visible=state.weather==='rainy';snow.visible=state.weather==='snowy';
     ground.material.color.set(state.weather==='snowy'?'#dce7ee':state.weather==='rainy'?'#494d4b':'#646557');
-    ambient.color.copy(nightTint).lerp(dayTint,day);
-    ambient.intensity=.24+1.28*day*brightness;
-    sun.position.set(10*Math.cos(transit*Math.PI),3+8*day,-6);
-    sun.intensity=day*.85*brightness;
-    sun.color.copy(warmSun).lerp(coolSun,day);
     litPane.emissiveIntensity=(1-day)**3*.36;
-    for(const [key,light,east] of fills){
-      light.intensity=brightness*day*(east?7*(1-transit)+1.5:4.7)*(state.curtains[key]?.19:1);
-      light.color.copy(warmSun).lerp(dayTint,day);
+
+    let transmittedSky=0;
+    for(const [key,light,eastFacing] of fills){
+      const transmission=windowTransmission(state,key);
+      const incidence=eastFacing?east:north;
+      const diffuse=brightness*(eastFacing?10:13);
+      const direct=brightness**3*incidence*18;
+      light.intensity=day*transmission*(diffuse+direct);
+      light.color.copy(dayTint).lerp(warmSun,direct/(diffuse+direct)*(1-.5*day));
+      transmittedSky+=transmission;
     }
+    // One hemisphere approximates broad sky fill and warm floor bounce.
+    // Keep the residual fill low so fixtures still shape the apartment at night.
+    ambient.color.copy(nightTint).lerp(dayTint,day);
+    ambient.groundColor.copy(nightGround).lerp(state.weather==='snowy'?snowGround:dayGround,day);
+    ambient.intensity=.23+day*brightness*(.48+1.7*transmittedSky/fills.length);
     for(const [key,,,,,,power] of lightDefinitions){
       const l=state.lights[key];
       lamps[key].color.setRGB(...temperatureRGB(l.kelvin),T.SRGBColorSpace);

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.1 — Daylight and exposure
+
+- Strengthened local window daylight using façade orientation, time, weather and curtains, with a broad sky fill and floor bounce approximation.
+- Added manual and automatic camera exposure, including reset, scene persistence, reference text and PNG output.
+- Existing scenes load at manual 0 EV.
+
 ## 1.1.0 — Scene Studio
 
 - Introduced a full-viewport mobile studio with accessible three-position controls and three interaction modes.

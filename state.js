@@ -1,4 +1,4 @@
-const VERSION = '1.1.0';
+const VERSION = '1.1.1';
 const SAVE_KEY = 'yrliet-apartment-v1';
 const TAU = Math.PI * 2;
 const frames = {landscape: 4/3, portrait: 3/4, square: 1};
@@ -62,6 +62,7 @@ function defaultScene() {
     schemaVersion:2, appVersion:VERSION, name:'Mieszkanie', timeOfDay:8,
     weather:'sunny',date:'',perspective:'independent',characters:keyed(Object.keys(characterNames),defaultCharacter),
     camera:{x:6.50, y:7.82, yaw:0, pitch:0, height:1.2, verticalFov:75, framing:'landscape', grid:false, seatedOnSofa:false},
+    exposure:{ev:0, automatic:false},
     lights:Object.fromEntries(lightDefinitions.map(([key,,,,,kelvin]) => [key,{on:false,intensity:1,kelvin}])),
     doors:keyed(keysFor(doorDefinitions), key => key !== 'entry'),
     windows:keyed(Object.keys(windowNames), () => false),
@@ -121,6 +122,13 @@ function validateScene(input) {
   scene.name = name(t.name,80,'name');
   scene.timeOfDay = number(t.timeOfDay,0,23.75,'timeOfDay');
   scene.camera = camera(t.camera,'camera');
+  if (t.exposure !== undefined) {
+    const exposure = record(t.exposure,'exposure');
+    scene.exposure = {
+      ev:number(exposure.ev,-2,2,'exposure.ev'),
+      automatic:bool(exposure.automatic,'exposure.automatic'),
+    };
+  }
   scene.lights = keyed(keysFor(lightDefinitions), key => {
     const field = 'lights.'+key;
     const light = record(record(t.lights,'lights')[key],field);

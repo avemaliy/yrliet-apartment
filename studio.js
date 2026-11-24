@@ -387,7 +387,7 @@ $('prepareShare').onclick=()=>{
   const description=summaryText();
   const markers=$('includeMarkers').checked;
   const scene={...clone(state),reference:{room:currentRoom(camera),camera,aspectRatio:frames[camera.framing],
-    markersInImage:markers,description}};
+    appliedExposureEV:appliedExposure(state,camera),markersInImage:markers,description}};
   try {
     engine.render(state,canvas.clientWidth,canvas.clientHeight,{markers});
     canvas.toBlob(blob=>{
