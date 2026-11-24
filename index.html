@@ -1,62 +1,65 @@
-<!doctype html><html lang="pl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Yrliet — Apartment v0.5</title><style>body{margin:0;background:#252724;color:#eee;font:15px system-ui}main{max-width:1000px;margin:auto;padding:12px}canvas{display:block;width:100%;height: min(58vh,540px);background:#aaa;touch-action:none;border-radius:8px}button,select{background:#41443e;color:white;border:1px solid #777;padding:10px;border-radius:6px;margin:3px}label{display:inline-block;margin:8px}input{vertical-align:middle}p{color:#bbb}h2{margin:5px 0}</style><main><h2>Apartment Identity / 05</h2><p>WebGL · całe mieszkanie · przeciągnij widok, aby się rozglądać.</p><canvas id="c"></canvas><details open><summary>Plan mieszkania · dotknij, aby zmienić pozycję</summary><canvas id="map" width="328" height="336" style="width:164px;height:168px;margin:8px auto;background:#ddd"></canvas></details><div id="presets"></div><div><button data-m="0">↑ Przód</button><button data-m="-1">← Lewo</button><button data-m="1">Prawo →</button><button data-m="2">↓ Tył</button><button id="save">Zapisz PNG</button></div><label>Wysokość oczu <input id="eye" type="range" min="0.5" max="2" step=".05" value="1.2"><span id="ev"></span></label><label>Pole widzenia <input id="fov" type="range" min="45" max="100" value="75"></label><label>Pora dnia <input id="light" type="range" min="0" max="23.75" step=".25" value="8"><span id="clock"></span></label><details open><summary>Lampy i drzwi</summary><div id="switches"></div><button id="sofa">Rozłóż kanapę</button><button id="store">Zapisz stan</button><button id="restore">Przywróć stan</button><span id="notice"></span></details><p id="status"></p><p>Komputer: WASD / strzałki. Telefon: przyciski ruchu i przeciąganie. Model WebGL wymaga internetu do załadowania Three.js. Światło jest uproszczone.</p></main><script src="https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.min.js"></script><script>
-const c=document.querySelector('#c'),eye=document.querySelector('#eye'),fov=document.querySelector('#fov'),light=document.querySelector('#light');let X=5.8,Y=7.65,A=Math.PI,P=0;const B=[],walls=[];function box(x,y,z,w,d,h,col,solid=false){B.push({x,y,z,w,d,h,col});if(solid)walls.push([x,y,w,d])}function wall(x,y,w,d){box(x,y,0,w,d,3.1,'#d9d4c7',true)}function windowWall(x,y,w,d){box(x,y,0,w,d,.85,'#d9d4c7',true);box(x,y,2.55,w,d,.55,'#d9d4c7');box(x,y,.85,w,d,1.7,'#91aab0');}function furniture(x,y,w,d,h,col){box(x,y,0,w,d,h,col,true)}
-// x east, y south. North courtyard; kitchen east courtyard.
-box(0,0,-.12,8.2,8.4,.12,'#a88c69');for(let i=0;i<41;i++)for(let j=0;j<14;j++)box(i*.2,j*.6,-.024,.196,.596,.026,(i+j)%3===0?'#a88b68':'#b49a78');
-wall(0,0,.14,8.4);wall(8.06,0,.14,6.1);windowWall(8.06,6.1,.14,1.55);wall(8.06,7.65,.14,.75);wall(0,0,.75,.14);windowWall(.75,0,1.9,.14);wall(2.65,0,2.9,.14);windowWall(5.55,0,1.9,.14);wall(7.45,0,.75,.14);wall(0,8.26,3.65,.14);wall(4.55,8.26,3.65,.14);
-wall(3.4,0,.12,3.4);wall(3.4,4.3,.12,2.15);wall(3.4,7.35,.12,1.05);wall(4.68,0,.12,3.4);wall(4.68,4.3,.12,.9);wall(0,5.2,3.4,.12);wall(4.8,5.2,3.4,.12);wall(3.52,1.65,.22,.12);wall(4.48,1.65,.2,.12);
-// floors and furniture
-// Complete apartment furnishings
-const green='#17483f', oak='#967451', linen='#d9d0bf';
-function legs(x,y,w,d,h,col){for(let dx of [.04,w-.09])for(let dy of [.04,d-.09])box(x+dx,y+dy,0,.05,.05,h,col)}
-function desk(x,y,w,d){legs(x,y,w,d,.73,oak);box(x,y,.73,w,d,.045,oak);walls.push([x,y,w,d])}
-function rug(x,y,w,d,col){box(x,y,.007,w,d,.012,col);for(let i=0;i<10;i++)box(x+i*w/10,y,.02,.012,d,.002,'#b3a18c')}
-// User room: sofa faces east, TV opposite
-let sofaStart=B.length;legs(.18,1.3,.96,2.2,.12,'#292b29');box(.18,1.3,.12,.96,2.2,.26,green);box(.18,1.3,.38,.22,2.2,.48,green);for(let y of [1.3,3.32])box(.18,y,.38,.96,.18,.31,green);for(let i=0;i<3;i++){box(.41,1.49+i*.61,.38,.71,.59,.14,'#24574d');box(.38,1.49+i*.61,.52,.19,.59,.34,'#205047')}let sofaEnd=B.length;walls.push([.18,1.3,.96,2.2]);
-legs(2.86,1.58,.46,1.65,.12,'#292929');box(2.86,1.58,.12,.46,1.65,.36,'#383532');box(2.83,1.55,.48,.49,1.71,.04,'#262626');box(2.94,2.12,.52,.24,.62,.035,'#aaa9a5');box(3.04,1.68,.555,.045,1.44,.82,'#151719');box(3.033,1.69,.565,.008,1.42,.80,'#111517');box(2.89,1.8,.52,.09,.18,.025,'#222');walls.push([2.83,1.55,.49,1.71]);
-desk(.88,.19,1.64,.62);box(1.15,.32,.775,.35,.24,.025,'#363b3d');box(1.15,.32,.8,.35,.025,.24,'#34383a');legs(1.48,.91,.43,.43,.43,'#454541');box(1.48,.91,.43,.43,.43,.06,'#555b55');box(1.48,1.29,.49,.43,.05,.39,'#555b55');furniture(.18,4.46,1.55,.59,2.12,'#a28b72');for(let x of [.22,.98]){box(x,4.43,.12,.72,.03,1.92,'#b3a087');box(x+.62,4.39,1.02,.025,.04,.16,'#514b42')}rug(1.25,1.65,1.25,1.65,'#c0b19a');
-// Yrliet room
-furniture(6.25,1.5,1.65,2.1,.28,'#8b725d');box(6.25,1.5,.28,1.65,2.1,.2,'#e1d9cb');box(6.25,1.43,0,1.65,.09,.9,'#9a7b60');box(6.35,1.63,.48,.66,.43,.12,'#e7dfd1');box(7.1,1.65,.48,.66,.43,.12,'#d8d2c7');box(6.27,2.12,.48,1.61,1.45,.09,'#8b9b8e');box(6.28,3.1,.57,1.58,.45,.05,'#b8a59c');desk(5,.18,1.7,.7);box(5.55,.33,.775,.7,.05,.43,'#303536');box(5.77,.38,.775,.26,.18,.035,'#4c4c47');box(5.45,.56,.775,.45,.14,.025,'#333');legs(5.55,1,.45,.45,.43,'#5c5145');box(5.55,1,.43,.45,.45,.06,'#86786c');box(5.55,1.4,.49,.45,.05,.43,'#86786c');furniture(7.65,3.85,.35,1.15,1.8,'#92765d');for(let z of [.3,.7,1.1,1.5]){box(7.28,3.85,z,.38,1.15,.045,oak);for(let i=0;i<8;i++)box(7.3,3.9+i*.13,z+.045,.24,.09,.19+(i%3)*.04,['#6b786b','#a76e59','#d2c1a3','#4e5860'][i%4])}rug(5.05,2.15,1.05,1.7,'#a99a85');furniture(7.4,.55,.49,.48,.54,oak);box(7.43,.59,.54,.2,.24,.04,'#b6a78d');box(8.005,2.05,1.35,.035,.8,.65,'#66584a');box(7.995,2.1,1.4,.02,.7,.55,'#a8b0a1');
-// Bathroom: tiled floor, shower, basin, WC, mirror
-box(.15,5.34,.005,3.24,2.9,.02,'#b8b5a5');for(let i=0;i<10;i++)for(let j=0;j<9;j++)box(.16+i*.32,5.35+j*.32,.025,.313,.313,.008,(i+j)%2?'#d3d0c4':'#c7c4b9');furniture(.25,5.5,.95,.95,.12,'#e5e2da');box(.25,5.5,.12,.045,.95,1.95,'#a5b7b6');box(.25,5.5,.12,.95,.045,1.95,'#b6c7c6');box(.28,5.65,1.4,.04,.12,.5,'#aeb5b3');box(.28,5.65,1.88,.27,.12,.035,'#aeb5b3');furniture(.25,7.5,.6,.5,.78,'#a99b87');box(.22,7.46,.78,.66,.57,.12,'#eeeae2');box(.31,7.55,.9,.48,.38,.015,'#c2c5c0');box(.5,7.92,.9,.045,.045,.18,'#aaa');box(.15,7.45,1.12,.035,.6,.72,'#aebdc0');furniture(2.4,5.5,.45,.7,.43,'#eee');box(2.4,5.5,.43,.45,.19,.42,'#e5e3db');box(2.42,5.7,.43,.41,.48,.055,'#f0ede6');box(.18,6.6,.8,.04,.6,.045,'#aaa');box(.21,6.72,.45,.04,.38,.38,'#a5a99a');
-// Utility closet and hallway
-furniture(3.55,.2,.65,.65,.85,'#e7e7e0');box(3.6,.85,.1,.55,.025,.64,'#b6b9b6');box(3.65,.88,.2,.45,.025,.45,'#53636a');for(let z of [.4,.85,1.3,1.75]){box(4.35,.2,z,.3,1.3,.045,oak);for(let i=0;i<3;i++)box(4.37,.25+i*.38,z+.05,.23,.28,.24,['#b9b5a0','#d5cbb8','#85958a'][i])}box(3.56,7.55,1.5,.035,.55,.055,oak);for(let i=0;i<4;i++)box(3.59,7.59+i*.12,1.42,.08,.035,.08,'#6a6257');box(3.56,7.1,.1,.25,.43,.36,'#8d7861');
-// window frames, sills, radiators, door lintels
-for(let x of [.75,5.55]){box(x-.08,.14,.81,2.06,.22,.07,'#e7e0d1');for(let dx of [0,.93,1.85])box(x+dx,.14,.88,.055,.06,1.67,'#eee8dc');for(let z of [.88,1.96,2.49])box(x,.14,z,1.9,.06,.055,'#eee8dc');for(let i=0;i<15;i++)box(x+.12+i*.11,.18,.15,.075,.12,.6,'#dedbd0')}
-for(let [x,y,w,d] of [[3.4,3.4,.12,.9],[4.68,3.4,.12,.9],[3.4,6.45,.12,.9],[3.74,1.65,.74,.12],[3.65,8.26,.9,.14]]){box(x,y,2.15,w,d,.95,'#d9d4c7');box(x,y,2.1,w,d,.055,'#e8e1d4')}
-// Kitchen joinery and everyday objects
-const cream='#d8cdb5',wood='#9d7954',dark='#655747';
-for(let i=0;i<5;i++){let x=5+i*.58; furniture(x,5.34,.56,.58,.86,cream);box(x+.025,5.925,.13,.51,.025,.65,'#e1d7c2');box(x+.19,5.96,.73,.18,.035,.025,dark)}
-box(4.98,5.33,.86,2.94,.64,.055,wood);for(let i=0;i<14;i++)for(let j=0;j<4;j++)box(5+i*.205,5.325,.94+j*.15,.199,.018,.144,(i+j)%5?'#d9cbb5':'#c9baa4');
-for(let i=0;i<2;i++){let x=5+i*.61;box(x,5.34,1.62,.59,.34,.68,cream);box(x+.03,5.685,1.65,.53,.025,.61,'#e7ddc9');box(x+.46,5.72,1.75,.025,.035,.14,dark)}
-for(let z of [1.58,2.02]){box(6.35,5.34,z,1.48,.28,.045,wood);for(let i=0;i<5;i++)box(6.4+i*.22,5.4,z+.05,.13,.13,.13,['#a8b5a2','#e6d7c2','#ad765b','#d4c8b3','#697e82'][i])}
-// sink and stove
-box(5.19,5.43,.916,.57,.43,.022,'#a6a9a4');box(5.24,5.48,.94,.47,.33,.012,'#626d6c');box(5.43,5.4,.94,.035,.035,.25,'#b8c1bd');box(5.43,5.4,1.17,.035,.15,.035,'#b8c1bd');
-box(6.62,5.94,.2,.57,.035,.51,'#343535');box(6.66,5.98,.66,.49,.03,.035,'#b8b7ac');box(6.6,5.39,.92,.59,.51,.025,'#deddd4');for(let x of [6.68,6.96])for(let y of [5.45,5.72]){box(x,y,.95,.17,.16,.025,'#30302e');box(x+.05,y+.04,.975,.07,.08,.012,'#6a6860')}
-furniture(7.35,7.5,.6,.65,1.85,'#e0ddd3');box(7.35,7.47,.04,.6,.03,1.25,'#eee9dc');box(7.35,7.47,1.32,.6,.03,.49,'#eee9dc');for(let z of [.99,1.43])box(7.43,7.43,z,.035,.035,.19,dark);for(let i=0;i<3;i++)box(7.57+i*.1,7.435,1.12+i*.16,.08,.008,.1,['#9b795c','#8b9c91','#c0a68a'][i]);
-// dining table, four distinct chairs
-box(5.65,6.65,.72,1.25,.8,.06,wood);for(let x of [5.7,6.78])for(let y of [6.7,7.34])box(x,y,0,.07,.07,.72,dark);walls.push([5.65,6.65,1.25,.8]);
-for(let [x,y,side,col] of [[5.95,6.15,0,'#82735f'],[5.95,7.6,1,'#a58b68'],[5.1,6.83,2,'#718477'],[7.05,6.83,3,'#8c674c']]){box(x,y,.42,.42,.42,.055,col);for(let dx of [0,.35])for(let dy of [0,.35])box(x+dx,y+dy,0,.055,.055,.42,col);if(side<2){let yy=y+(side===1?.37:0);for(let dx of [0,.35])box(x+dx,yy,.47,.055,.05,.43,col);box(x,yy,.77,.42,.05,.11,col)}else{let xx=x+(side===3?.37:0);for(let dy of [0,.35])box(xx,y+dy,.47,.05,.055,.43,col);box(xx,y,.77,.05,.42,.11,col)}}
-// sill, window frame, radiator
-box(7.79,6.04,.81,.27,1.67,.07,'#e7e0d1');for(let y of [6.1,6.84,7.59])box(7.99,y,.88,.07,.055,1.67,'#eee8dc');for(let z of [.88,1.96,2.49])box(7.99,6.1,z,.07,1.55,.055,'#eee8dc');for(let i=0;i<13;i++)box(7.84,6.17+i*.105,.15,.13,.075,.6,'#dedbd0');
-// objects added as rounded meshes below
-const details=[];function round(x,y,z,r,h,col,top=r){details.push([x,y,z,r,h,col,top])}function plant(x,y,z,r){round(x,y,z,r,.16,'#a66c50',r*1.2);for(let i=0;i<7;i++){let a=i*2.4;round(x+Math.cos(a)*r*.65,y+Math.sin(a)*r*.65,z+.16,.035,.16+(i%3)*.06,['#647a48','#82965b','#456849'][i],.055)}}plant(7.91,6.35,.88,.095);plant(7.91,7.32,.88,.08);round(6.28,7.02,.78,.075,.17,'#839a91',.055);for(let i=0;i<5;i++){round(6.24+i*.019,7.02,.95,.007,.16+i*.015,'#687b4e');round(6.24+i*.019,7.02,1.11+i*.015,.035,.04,['#e1c4a5','#d5b05f'][i%2])}round(6.02,7.23,.78,.045,.095,'#536c70');round(6.48,6.85,.78,.045,.095,'#d7c4a2');box(6.65,7.13,.78,.16,.22,.025,'#7b8270');box(6.66,7.14,.805,.14,.20,.009,'#e6d8ba');
-round(6.27,7.05,2.45,.24,.24,'#c7b08a',.09);round(6.27,7.05,2.69,.012,.41,'#514b42');
-// Personal objects and greenery
-plant(.35,.48,0,.14);plant(2.55,.25,.88,.09);plant(7.8,.35,0,.15);plant(5.15,.32,.78,.08);plant(7.62,4.8,0,.13);round(7.64,.77,.54,.09,.22,'#c9b79c',.13);round(1.2,.55,.78,.045,.1,'#d2c2a8');for(let [x,y] of [[1.7,2.6],[6.5,2.6],[4.1,4.5],[1.6,6.8]]){round(x,y,2.75,.17,.16,'#d9c6a6',.08);round(x,y,2.91,.012,.19,'#514b42')}
-// ceiling
-box(0,0,3.1,8.2,8.4,.04,'#e6e0d4');
-const presets=[['K01 Wejście',4.1,7.95,0,1.75],['K02 Pokoje',4.1,4.65,Math.PI,1.75],['K03 Twoje POV',6.16,7.82,0,1.2],['K04 Yrliet POV',6.16,6.35,Math.PI,1.2],['K05 Blat',6.1,6.15,Math.PI,1.65],['Twój pokój',1.7,3.8,0,1.7],['Pokój Yrliet',5.7,4.5,0,1.65],['Kanapa',.75,2.4,Math.PI/2,1.05],['Łazienka',1.65,6.8,0,1.7],['Schowek',4.05,1.35,0,1.65]];
-let renderer,scene,camera,ambient,sun,lamps=[],doorMeshes=[],sofaMeshes=[],bedMeshes=[];const lampNames=['Kuchnia','Twój pokój','Pokój Yrliet','Korytarz','Łazienka','Schowek'], lampOn=[false,false,false,false,false,false], doors=[{name:'Twój pokój',x:3.46,y:3.4,axis:0,open:true},{name:'Pokój Yrliet',x:4.74,y:3.4,axis:0,open:true},{name:'Łazienka',x:3.46,y:6.45,axis:0,open:true},{name:'Schowek',x:3.74,y:1.71,axis:1,open:true,w:.74},{name:'Wejście',x:3.65,y:8.33,axis:1,open:false}];let unfolded=false;
-try {
- if(!window.THREE)throw Error('Nie udało się załadować Three.js');
- renderer=new THREE.WebGLRenderer({canvas:c,antialias:true,preserveDrawingBuffer:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.outputColorSpace=THREE.SRGBColorSpace;
- scene=new THREE.Scene();scene.background=new THREE.Color('#b9b5a8');camera=new THREE.PerspectiveCamera(75,1,.035,60);
- ambient=new THREE.HemisphereLight(0xe6edff,0x9b8065,1.6);scene.add(ambient);sun=new THREE.DirectionalLight(0xffe6c0,1.4);sun.position.set(9,8,-3);scene.add(sun);
- for(let [x,y] of [[6.3,6.8],[1.7,2.6],[6.5,2.6],[4.1,4.5],[1.6,6.8],[4.05,.95]]){let l=new THREE.PointLight(0xffd4a0,9,8,2);l.position.set(x,2.8,y);scene.add(l);lamps.push(l)}
- const groups=new Map();for(let b of B.slice(0,sofaStart).concat(B.slice(sofaEnd))){let key=b.col;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(b)}
- const geom=new THREE.BoxGeometry(1,1,1),obj=new THREE.Object3D();for(let [col,items] of groups){let mesh=new THREE.InstancedMesh(geom,new THREE.MeshStandardMaterial({color:col,roughness:.88}),items.length);items.forEach((b,i)=>{obj.position.set(b.x+b.w/2,b.z+b.h/2,b.y+b.d/2);obj.scale.set(b.w,b.h,b.d);obj.updateMatrix();mesh.setMatrixAt(i,obj.matrix)});scene.add(mesh)}
- function meshBox(x,y,z,w,d,h,col,parent=scene){let m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshStandardMaterial({color:col,roughness:.85}));m.position.set(x+w/2,z+h/2,y+d/2);parent.add(m);return m}for(let b of B.slice(sofaStart,sofaEnd))sofaMeshes.push(meshBox(b.x,b.y,b.z,b.w,b.d,b.h,b.col));for(let i=0;i<3;i++)bedMeshes.push(meshBox(.23,1.49+i*.61,.38,1.5,.59,.14,'#24574d'));bedMeshes.push(meshBox(.23,1.3,.12,1.5,2.2,.26,green));for(let d of doors){let pivot=new THREE.Group();pivot.position.set(d.x,0,d.y);scene.add(pivot);let w=d.w||.9;meshBox(0,-.025,.02,w,.05,2.07,'#e5dfd1',pivot);meshBox(w-.12,-.065,1.02,.08,.13,.045,'#9a8051',pivot);doorMeshes.push(pivot)}
- for(let [x,y,z,r,h,col,top] of details){let m=new THREE.Mesh(new THREE.CylinderGeometry(top,r,h,12),new THREE.MeshStandardMaterial({color:col,roughness:.85}));m.position.set(x,z+h/2,y);scene.add(m)}
-}catch(e){document.querySelector('#status').textContent='Błąd WebGL: '+e.message;}
-const map=document.querySelector('#map'),mg=map.getContext('2d');function drawMap(){mg.fillStyle='#c4b59c';mg.fillRect(0,0,328,336);mg.fillStyle='#ece3d1';mg.fillRect(0,0,136,208);mg.fillRect(192,0,136,208);mg.fillStyle='#393c36';for(let [x,y,w,d] of walls)mg.fillRect(x*40,y*40,w*40,d*40);mg.fillStyle='#a8d8cf';mg.beginPath();mg.arc(X*40,Y*40,5,0,7);mg.fill();mg.strokeStyle='#167e70';mg.lineWidth=3;mg.beginPath();mg.moveTo(X*40,Y*40);mg.lineTo(X*40+Math.sin(A)*20,Y*40-Math.cos(A)*20);mg.stroke()}map.onclick=e=>{let r=map.getBoundingClientRect(),x=(e.clientX-r.left)/r.width*8.2,y=(e.clientY-r.top)/r.height*8.4;if(x>.2&&x<8&&y>.2&&y<8.2&&!blocked(x,y)){X=x;Y=y;render()}};function render(){drawMap();if(!renderer)return;let W=c.clientWidth,H=c.clientHeight;if(!W||!H)return;renderer.setSize(W,H,false);camera.aspect=W/H;camera.fov=Math.min(110,2*Math.atan(Math.tan(+fov.value*Math.PI/360)/camera.aspect)*180/Math.PI);camera.updateProjectionMatrix();let E=+eye.value;camera.position.set(X,E,Y);camera.lookAt(X+Math.sin(A)*Math.cos(P),E+Math.sin(P),Y-Math.cos(A)*Math.cos(P));let hour=+light.value,day=Math.max(0,Math.sin((hour-6)/12*Math.PI));if(hour<6||hour>18)day=0;ambient.intensity=.16+1.44*day;sun.intensity=1.4*day;sun.position.set(9*Math.cos((hour-6)/12*Math.PI),3+7*day,-3);sun.color.set(day<.5?0xffc18a:0xfff3df);lamps.forEach((l,i)=>l.intensity=lampOn[i]?14:0);document.querySelector('#clock').textContent=String(Math.floor(hour)).padStart(2,'0')+':'+String(Math.round(hour%1*60)).padStart(2,'0');doors.forEach((d,i)=>doorMeshes[i].rotation.y=(d.axis?0:-Math.PI/2)+(d.open?Math.PI/2:0));sofaMeshes.forEach((m,i)=>m.visible=!unfolded||i<7);bedMeshes.forEach(m=>m.visible=unfolded);renderer.render(scene,camera);document.querySelector('#ev').textContent=E.toFixed(2)+' m';document.querySelector('#status').textContent='Pozycja: '+X.toFixed(2)+', '+Y.toFixed(2)+' m · obrót '+Math.round((A*180/Math.PI%360+360)%360)+'°';}
-function blocked(x,y){return walls.some(([a,b,w,d])=>x>a-.1&&x<a+w+.1&&y>b-.1&&y<b+d+.1)||doors.some(d=>!d.open&&(d.axis?Math.abs(y-d.y)<.14&&x>d.x-.1&&x<d.x+(d.w||.9)+.1:Math.abs(x-d.x)<.14&&y>d.y-.1&&y<d.y+(d.w||.9)+.1))||(unfolded&&x<1.83&&x>.18&&y>1.2&&y<3.6)}function move(k){let a=A+(k===2?Math.PI:k*Math.PI/2),x=X+Math.sin(a)*.18,y=Y-Math.cos(a)*.18;if(x>.2&&x<8&&y>.2&&y<8.2&&!blocked(x,y)){X=x;Y=y}render()}for(let [name,x,y,a,e] of presets){let b=document.createElement('button');b.textContent=name;b.onclick=()=>{X=x;Y=y;A=a;P=0;eye.value=e;render()};document.querySelector('#presets').append(b)}document.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>move(+b.dataset.m));let drag=null;c.onpointerdown=e=>{drag=[e.clientX,e.clientY];c.setPointerCapture(e.pointerId)};c.onpointermove=e=>{if(!drag)return;A+=(e.clientX-drag[0])*.006;P=Math.max(-1.2,Math.min(1.2,P+(e.clientY-drag[1])*.005));drag=[e.clientX,e.clientY];render()};c.onpointerup=c.onpointercancel=()=>drag=null;window.onkeydown=e=>{let k={w:0,ArrowUp:0,a:-1,ArrowLeft:-1,d:1,ArrowRight:1,s:2,ArrowDown:2}[e.key];if(k!==undefined){e.preventDefault();move(k)}};[eye,fov,light].forEach(e=>e.oninput=render);document.querySelector('#save').onclick=()=>{let a=document.createElement('a');a.download='Yrliet_POV.png';a.href=c.toDataURL();a.click()};const sw=document.querySelector('#switches');function controls(){sw.replaceChildren();lampNames.forEach((n,i)=>{let b=document.createElement('button');b.textContent='💡 '+n+': '+(lampOn[i]?'ON':'OFF');b.onclick=()=>{lampOn[i]=!lampOn[i];controls();render()};sw.append(b)});doors.forEach(d=>{let b=document.createElement('button');b.textContent='Drzwi '+d.name+': '+(d.open?'otwarte':'zamknięte');b.onclick=()=>{d.open=!d.open;controls();render()};sw.append(b)});document.querySelector('#sofa').textContent=unfolded?'Złóż kanapę':'Rozłóż kanapę'}document.querySelector('#sofa').onclick=()=>{unfolded=!unfolded;controls();render()};const notice=document.querySelector('#notice');document.querySelector('#store').onclick=()=>{try{localStorage.setItem('yrliet-v05',JSON.stringify({X,Y,A,P,eye:eye.value,fov:fov.value,hour:light.value,lampOn,doors:doors.map(d=>d.open),unfolded}));notice.textContent=' Zapisano lokalnie.'}catch(e){notice.textContent=' Zapis niedostępny.'}};document.querySelector('#restore').onclick=()=>{try{let t=JSON.parse(localStorage.getItem('yrliet-v05'));if(!t){notice.textContent=' Brak zapisu.';return}({X,Y,A,P,unfolded}=t);eye.value=t.eye;fov.value=t.fov;light.value=t.hour;t.lampOn.forEach((v,i)=>lampOn[i]=v);t.doors.forEach((v,i)=>doors[i].open=v);controls();render();notice.textContent=' Przywrócono.'}catch(e){notice.textContent=' Nie udało się przywrócić.'}};controls();new ResizeObserver(render).observe(c);X=6.16;Y=7.82;A=0;render();</script></html>
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Yrliet — Apartment v1.0</title>
+<link rel="stylesheet" href="style.css">
+<script defer src="https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.min.js"></script>
+<script defer src="geometry.js"></script>
+<script defer src="state.js"></script>
+<script defer src="render.js"></script>
+<script defer src="app.js"></script>
+</head>
+<body>
+<main>
+<h1>Yrliet Apartment</h1>
+<div id="view">
+  <div id="frame"><canvas id="c" aria-label="Widok mieszkania 3D"></canvas><div id="grid" hidden></div></div>
+  <div id="photoTools" hidden><button id="exitPhoto">Pokaż sterowanie</button><button id="photoSave">Zapisz PNG</button></div>
+  <p id="renderError" role="alert" hidden></p>
+</div>
+<div id="controls">
+  <div class="movement" aria-label="Ruch">
+    <button data-m="0">Przód</button><button data-m="-1">Lewo</button><button data-m="1">Prawo</button><button data-m="2">Tył</button>
+    <button id="enterPhoto">Tryb zdjęcia</button>
+  </div>
+  <details><summary>Nawigacja</summary>
+    <p>Przeciągnij widok, aby się rozglądać. Na komputerze użyj WASD lub strzałek.</p>
+    <canvas id="map" width="328" height="336" aria-label="Plan mieszkania"></canvas>
+    <div id="presets"></div>
+  </details>
+  <details><summary>Światło</summary>
+    <label>Pora dnia <input id="light" type="range" min="0" max="23.75" step=".25"><output id="clock"></output></label>
+    <div id="lightingPresets"></div><div id="lights"></div>
+  </details>
+  <details><summary>Drzwi, okna i wyposażenie</summary><div id="switches"></div>
+    <button id="sofa"></button><button id="tv"></button>
+  </details>
+  <details><summary>Aparat i kompozycja</summary>
+    <label>Wysokość <input id="eye" type="range" min=".3" max="2" step=".01"><output id="ev"></output></label>
+    <label>Pionowe pole widzenia <input id="fov" type="range" min="30" max="100" step="1"><output id="fv"></output></label>
+    <div id="heights"></div>
+    <label>Kadr <select id="aspect"><option value="landscape">Poziomy 4:3</option><option value="portrait">Pionowy 3:4</option><option value="square">Kwadrat 1:1</option></select></label>
+    <label><input id="showGrid" type="checkbox"> Siatka trójpodziału</label>
+    <button id="save">Zapisz PNG</button>
+    <p id="status"></p>
+    <label>Nazwa ujęcia <input id="bookmarkName" maxlength="64"></label><button id="addBookmark">Zapisz ujęcie</button>
+    <select id="bookmarks" aria-label="Zapisane ujęcia"></select><button id="loadBookmark">Wczytaj ujęcie</button><button id="deleteBookmark">Usuń ujęcie</button>
+  </details>
+  <details><summary>Ustawienie mebli</summary>
+    <label>Przedmiot <select id="furniture"></select></label>
+    <div id="editActions"></div>
+    <button id="resetFurniture">Przywróć położenie</button>
+  </details>
+  <details><summary>Zapis i wymiana scen</summary>
+    <label>Nazwa sceny <input id="sceneName" maxlength="80"></label><button id="store">Zapisz scenę</button>
+    <select id="slots" aria-label="Zapisane sceny"></select><button id="restore">Wczytaj scenę</button><button id="deleteSlot">Usuń scenę</button>
+    <div><button id="export">Eksportuj JSON</button><button id="import">Importuj JSON</button><input id="file" type="file" accept=".json,application/json" hidden><button id="reset">Przywróć mieszkanie</button></div>
+    <label>Opis sceny <textarea id="summary" rows="5" readonly></textarea></label><button id="copy">Kopiuj opis</button>
+  </details>
+  <p id="notice" role="status"></p>
+</div>
+</main>
+</body>
+</html>

@@ -1,0 +1,28 @@
+:root { color-scheme: dark; font: 16px system-ui, sans-serif; background: #252724; color: #eeeae1; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+main { max-width: 1050px; margin: auto; padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); }
+h1 { font-size: 1.35rem; margin: 0 0 .55rem; }
+#view { position: relative; display: grid; place-items: center; height: min(58vh, 650px); background: #151714; border-radius: 8px; overflow: hidden; }
+#frame { position: relative; }
+#c { display: block; width: 100%; height: 100%; touch-action: none; }
+#grid { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(transparent calc(100% - 1px), #fff8 0) 0 0 / 100% calc(100% / 3), linear-gradient(90deg, transparent calc(100% - 1px), #fff8 0) 0 0 / calc(100% / 3) 100%; }
+#photoTools { position: absolute; top: max(10px, env(safe-area-inset-top)); right: max(10px, env(safe-area-inset-right)); }
+.photo #view { position: fixed; z-index: 1; inset: 0; height: auto; border-radius: 0; }
+.photo h1, .photo #controls { display: none; }
+#renderError { position: absolute; inset: auto 12px 12px; padding: 10px; background: #242522; }
+button, select, input, textarea { font: inherit; }
+button, select, input:not([type=range], [type=checkbox]), textarea { color: inherit; background: #353a34; border: 1px solid #6b7468; border-radius: 6px; padding: .55rem .7rem; min-height: 44px; max-width: 100%; }
+button { margin: 3px; cursor: pointer; touch-action: manipulation; }
+button[aria-pressed=true] { background: #496453; }
+label { display: inline-flex; flex-wrap: wrap; gap: .45rem; align-items: center; padding: .35rem; }
+input[type=range] { accent-color: #b8c9b0; min-height: 28px; }
+input[type=checkbox] { width: 22px; height: 22px; }
+details { border-bottom: 1px solid #555a50; padding: .25rem 0; }
+summary { cursor: pointer; padding: .65rem .25rem; }
+#map { width: 164px; height: 168px; display: block; margin: .5rem auto; }
+#lights { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 255px), 1fr)); gap: .5rem; }
+fieldset { border: 1px solid #555a50; min-width: 0; padding: .35rem; }
+textarea { width: min(78vw, 540px); }
+#notice, #status { overflow-wrap: anywhere; }
+[hidden] { display: none !important; }
