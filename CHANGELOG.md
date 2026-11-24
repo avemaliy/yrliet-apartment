@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Grouped lighting controls into collapsible room sections with room-wide switches and locally remembered expansion. Individual controls and presets remain available.
+
 ## 1.0.0
 
 - Retained the v0.5 coordinates, exterior openings and original navigation and interaction features.

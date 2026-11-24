@@ -243,11 +243,61 @@ $('showGrid').onchange=()=>{state.camera.grid=$('showGrid').checked;refresh();};
 for(const [label,height] of [['Stojąca',1.65],['Siedząca',1.15],['Leżąca',.55]]){
   button($('heights'),label,()=>{state.camera.height=height;syncControls();refresh();});
 }
+const lightingRooms = [
+  ['kitchen', 'Kuchnia', ['kitchen', 'counter']],
+  ['user', 'Twój pokój', ['user', 'floor', 'userDesk']],
+  ['yrliet', 'Pokój Yrliet', ['yrliet', 'bedside', 'yrlietDesk', 'bookshelf']],
+  ['hall', 'Korytarz', ['hall']],
+  ['bath', 'Łazienka', ['bath']],
+  ['utility', 'Schowek', ['utility']],
+];
+const lightingRoomsKey = 'yrliet-apartment-lighting-rooms';
+let expandedLightingRooms = [];
+try {
+  const saved = JSON.parse(localStorage.getItem(lightingRoomsKey));
+  if (Array.isArray(saved)) expandedLightingRooms = saved;
+} catch {
+  // The lighting panel still works when local storage is unavailable.
+}
+const roomLightControls = lightingRooms.map(([id, name, keys]) => {
+  const section = document.createElement('details');
+  section.open = expandedLightingRooms.includes(id);
+  const summary = document.createElement('summary');
+  summary.textContent = name;
+  const masterLabel = document.createElement('label');
+  masterLabel.className = 'room-light-master';
+  const master = document.createElement('input');
+  master.type = 'checkbox';
+  master.setAttribute('aria-label', 'Wszystkie światła: ' + name);
+  masterLabel.append(master, 'Wszystkie światła');
+  const fixtures = document.createElement('div');
+  fixtures.className = 'room-light-fixtures';
+  section.append(summary, masterLabel, fixtures);
+  $('lights').append(section);
+  master.onchange = () => {
+    for (const key of keys) state.lights[key].on = master.checked;
+    syncControls();
+    refresh();
+  };
+  return {id, keys, section, fixtures, master};
+});
+for (const {section} of roomLightControls) {
+  section.addEventListener('toggle', () => {
+    const openRooms = roomLightControls.filter(room => room.section.open).map(room => room.id);
+    try {
+      localStorage.setItem(lightingRoomsKey, JSON.stringify(openRooms));
+    } catch {
+      // Expansion remains available for this visit.
+    }
+  });
+}
 const lightControls={};
 for(const [key,label] of lightDefinitions) {
   const group=document.createElement('fieldset'), legend=document.createElement('legend');
-  legend.textContent=label;group.append(legend);$('lights').append(group);
+  legend.textContent=label;group.append(legend);
+  roomLightControls.find(room => room.keys.includes(key)).fixtures.append(group);
   const toggle=button(group,'Wyłączone',()=>{state.lights[key].on=!state.lights[key].on;syncControls();refresh();});
+  toggle.setAttribute('aria-label',label);
   function range(title,field,min,max,step) {
     const label=document.createElement('label'), input=document.createElement('input'), out=document.createElement('output');
     input.type='range'; Object.assign(input,{min,max,step});
@@ -325,6 +375,11 @@ function syncControls() {
     controls.toggle.setAttribute('aria-pressed',l.on);
     controls.intensity.input.value=l.intensity;controls.intensity.out.textContent=Math.round(l.intensity*100)+'%';
     controls.kelvin.input.value=l.kelvin;controls.kelvin.out.textContent=l.kelvin+' K';
+  }
+  for (const {keys, master} of roomLightControls) {
+    const enabled = keys.filter(key => state.lights[key].on).length;
+    master.checked = enabled === keys.length;
+    master.indeterminate = enabled > 0 && enabled < keys.length;
   }
   for(const {el,label,read} of toggles){el.textContent=label(read());el.setAttribute('aria-pressed',read());}
   updateOptions($('bookmarks'),state.bookmarks.map((b,i)=>[String(i),b.name]));
