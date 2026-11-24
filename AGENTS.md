@@ -9,3 +9,10 @@ Yrliet Apartment is a persistent 3D spatial reference for storytelling, interior
 - Preserve stable scene identifiers and units. Document migration when changing the schema. Reject invalid imports before applying them.
 - Update the relevant project documentation after every substantial change. Exclude private conversations, personal information and actual residential addresses from the public repository.
 - Work on a branch, verify the relevant behavior, and open a pull request with architectural decisions, checks and limitations. Verify syntax, scene round trips, persistence, camera and collision. Check browser rendering and iPhone Safari where available.
+
+## Scene Studio
+
+- Use the existing storage key so schema 1 scenes and named slots migrate together. Keep snapshot validation independent of DOM and WebGL.
+- Keep the independent camera pose separate from the derived character POV. Character proxies and selection outlines must remain outside collision logic.
+- Keep direct viewport interaction scoped to the active mode and route object actions through the same controls used by the settings panel.
+- Verify photographic exports from the WebGL canvas and keep sharing local to the browser.

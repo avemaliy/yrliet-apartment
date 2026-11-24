@@ -21,6 +21,28 @@ function createApartment(canvas) {
   renderer.outputColorSpace = T.SRGBColorSpace;
   const scene = new T.Scene();
   scene.background = new T.Color();
+  const fog = new T.FogExp2('#afcfdf',0);
+  scene.fog=fog;
+  const ray=new T.Raycaster(), cursor=new T.Vector2();
+  function tag(object,kind,key) {
+    object.userData.interaction={kind,key};
+    return object;
+  }
+  function pick(x,y) {
+    cursor.set(x*2-1,1-y*2);
+    ray.setFromCamera(cursor,camera);
+    for(const hit of ray.intersectObjects(scene.children,true)){
+      let object=hit.object, action;
+      if(object.userData.ignorePick || object.material===contact) continue;
+      while(object){
+        if(!object.visible) break;
+        action ??= object.userData.interaction;
+        object=object.parent;
+      }
+      if(!object) return {action, x:hit.point.x, y:hit.point.z, z:hit.point.y};
+    }
+    return null;
+  }
   const camera = new T.PerspectiveCamera(75,1,.035,58);
   const ambient = new T.HemisphereLight(0xe6edff,0x9b8065,1);
   const sun = new T.DirectionalLight(0xffe6c0,1);
@@ -110,7 +132,7 @@ function createApartment(canvas) {
   const furnishings = {};
   for(const [key,[,x,y]] of Object.entries(editable)) {
     const group = new T.Group();
-    furnishings[key]=group;
+    furnishings[key]=tag(group,'furniture',key);
     group.position.set(x,0,y);
     scene.add(group);
     const range=furnitureGroups[key];
@@ -142,14 +164,18 @@ function createApartment(canvas) {
   for(const item of details){
     const [x,y,z,r,h,color,top]=item;
     if(Math.abs(x-6.28)<.08 && y===7.02 && z>=.78) cylinder(x-6.28,y-7.02,z,r,h,color,top,furnishings.vase);
-    else cylinder(...item);
+    else {
+      const mesh=cylinder(...item);
+      const fixture=lightDefinitions.find(([,,lx,ly,lz])=>lz>2.6 && Math.hypot(lx-x,ly-y)<.05 && z>2.4);
+      if(fixture) tag(mesh,'lights',fixture[0]);
+    }
   }
   const folded=new T.Group(), extended=new T.Group();
-  scene.add(folded,extended);
+  scene.add(tag(folded,'sofa','sofa'),tag(extended,'sofa','sofa'));
   for(let i=sofaStart;i<sofaEnd;i++){
     const b=B[i];
     const parent=i<sofaStart+8?scene:folded;
-    block(b.x,b.y,b.z,b.w,b.d,b.h,b.col,parent,finish(b));
+    tag(block(b.x,b.y,b.z,b.w,b.d,b.h,b.col,parent,finish(b)),'sofa','sofa');
   }
   block(.23,1.3,.12,1.55,2.2,.25,green,extended,'cloth');
   for(let i=0;i<3;i++){
@@ -166,7 +192,7 @@ function createApartment(canvas) {
     block(0,-.025,.02,w,.05,2.07,'#e5dfd1',pivot,'plaster');
     block(.09,-.031,.25,w-.18,.012,1.63,'#d8d2c4',pivot,'wood');
     block(w-.12,-.065,1.02,.08,.13,.045,'#9a8051',pivot,'metal');
-    return pivot;
+    return tag(pivot,'doors',key);
   });
   const glass=new T.MeshStandardMaterial({color:'#bfd9df',roughness:.13,transparent:true,opacity:.13,depthWrite:false});
   const glazing = {};
@@ -177,7 +203,7 @@ function createApartment(canvas) {
     const base=new T.Group();
     base.position.set(x+(east?.065:0),0,y+(east?0:.105));
     base.rotation.y=east?-Math.PI/2:0;
-    scene.add(base);
+    scene.add(tag(base,'windows',key));
     const sash=new T.Group(); base.add(sash); glazing[key]=sash;
     const glassPanel=block(.036,-.008,.91,span/2-.055,.016,1.55,'#bfd9df',sash);
     glassPanel.material=glass;
@@ -192,7 +218,7 @@ function createApartment(canvas) {
     rod.rotation.z=Math.PI/2; rod.position.y=2.62;
     const panels=[];
     for(let side=0;side<2;side++){
-      const panel=new T.Group(); base.add(panel); panels.push(panel);
+      const panel=new T.Group(); base.add(tag(panel,'curtains',key)); panels.push(panel);
       panel.position.set(side?span:0,0,east?.27:.34);
       for(let j=0;j<14;j++) {
         block((side?-1:1)*j*span/28-(side?span/27:0),Math.sin(j*2)*.03,east?.87:.63,span/27,.042,east?1.72:1.95,['#d0c5ae','#c4b69d','#dcd0b8'][j%3],panel,'cloth');
@@ -206,9 +232,10 @@ function createApartment(canvas) {
     fills.push([key,light,east]);
   });
   const exterior = new Map();
+  const ground=block(-13,-20,-3.3,39,47,.2,'#646557',scene,'plaster');
+  ground.material=ground.material.clone();
   const darkPane = material('#52606a');
   const litPane = new T.MeshStandardMaterial({color:'#59646b',roughness:.72,emissive:'#ae7641'});
-  block(-13,-20,-3.3,39,47,.2,'#646557',scene,'plaster');
   function facade(x,y,length,east) {
     const add=(u,z,w,h,mat,depth=.15,back=0)=>{
       if(!exterior.has(mat)) exterior.set(mat,[]);
@@ -238,6 +265,28 @@ function createApartment(canvas) {
     });
     scene.add(mesh);
   }
+  // A static precipitation cue in the courtyard. One draw call for each profile.
+  function precipitation(snow) {
+    const vertices=[];
+    for(let i=0;i<200;i++){
+      const north=i<115;
+      const x=north?-4+random()*18:8.4+random()*7;
+      const y=north?-9.8+random()*9.6:-.1+random()*14;
+      const z=-2+random()*11;
+      vertices.push(x,z,y);
+      if(!snow) vertices.push(x+.025,z-.23,y+.015);
+    }
+    const shape=new T.BufferGeometry();
+    shape.setAttribute('position',new T.Float32BufferAttribute(vertices,3));
+    const effect=snow
+      ? new T.Points(shape,new T.PointsMaterial({color:'#f9fcff',size:.037,opacity:.75,transparent:true,depthWrite:false}))
+      : new T.LineSegments(shape,new T.LineBasicMaterial({color:'#bac9d6',opacity:.34,transparent:true,depthWrite:false}));
+    effect.userData.ignorePick=true;
+    scene.add(effect);
+    return effect;
+  }
+  const rain=precipitation(false), snow=precipitation(true);
+  const weatherColors=keyed(Object.keys(weatherProfiles),key=>new T.Color(weatherProfiles[key][1]));
   const nightSky=new T.Color('#172338'), duskSky=new T.Color('#bda3a0'), daySky=new T.Color('#afcfdf');
   const nightTint=new T.Color('#9bafd3'), dayTint=new T.Color('#e6edff');
   const warmSun=new T.Color('#ffb47c'), coolSun=new T.Color('#fff2dc');
@@ -253,12 +302,15 @@ function createApartment(canvas) {
     mesh.rotation.x=-Math.PI/2;mesh.position.set(x,.0045,y);scene.add(mesh);
   }
   for(const [x,y,z,r,h] of [[.56,3.72,0,.125,1.23],[2.19,.48,.78,.074,.31],[7.64,.77,.54,.073,.16],[6.44,.54,.78,.075,.31]]) {
-    cylinder(x,y,z,r,.035,'#574c3b');
-    cylinder(x,y,z+.035,.014,h,'#766352');
-    cylinder(x,y,z+h,r*1.44,.14,'#d9c7a1',r*.95);
+    const [key]=lightDefinitions.find(([, ,lx,ly])=>lx===x && ly===y);
+    const fixture=tag(new T.Group(),'lights',key);
+    scene.add(fixture);
+    cylinder(x,y,z,r,.035,'#574c3b',r,fixture);
+    cylinder(x,y,z+.035,.014,h,'#766352',.014,fixture);
+    cylinder(x,y,z+h,r*1.44,.14,'#d9c7a1',r*.95,fixture);
   }
-  block(7.32,4.02,1.48,.025,.72,.022,'#d2baa1');
-  block(5.19,5.66,1.59,1.15,.04,.025,'#ddd0b5');
+  tag(block(7.32,4.02,1.48,.025,.72,.022,'#d2baa1'),'lights','bookshelf');
+  tag(block(5.19,5.66,1.59,1.15,.04,.025,'#ddd0b5'),'lights','counter');
   block(.91,4.97,1.48,.47,.055,.56,'#6a5845',scene,'wood');
   block(.945,4.93,1.51,.40,.035,.49,'#b1a191');
   block(.96,4.91,1.56,.3,.025,.21,'#727c69');
@@ -268,6 +320,7 @@ function createApartment(canvas) {
   block(5.06,.63,.777,.22,.15,.026,'#9b7166');
   block(1.88,.51,.777,.18,.14,.018,'#8a7e6b');
   const screen=block(3.030,1.69,.565,.009,1.42,.80,'#111517');
+  tag(screen,'tv','tv');
   screen.material=new T.MeshStandardMaterial({color:'#10161a',emissive:'#557789',roughness:.25});
   const screenImage=texture(128,(g,n)=>{
     const gradient=g.createLinearGradient(0,0,n,n);
@@ -280,11 +333,34 @@ function createApartment(canvas) {
     const source=new T.PointLight('#fff4db',0,range,2);
     source.position.set(x,z,y);
     scene.add(source);
+    if(key==='utility'){
+      const target=tag(block(x-.13,y-.13,z+.15,.26,.26,.04,'#ded4c1'),'lights',key);
+      target.material=new T.MeshBasicMaterial({colorWrite:false,depthWrite:false});
+    }
     return source;
   });
 
-  function render(state,w,h) {
-    const {camera:c,timeOfDay:hour}=state;
+  const selection=new T.BoxHelper(undefined,0xe0a96b);
+  selection.visible=false;
+  scene.add(selection);
+  const proxies=keyed(Object.keys(characterNames),id=>{
+    const root=new T.Group(), body=new T.Group(), head=new T.Group();
+    scene.add(root);root.add(body);body.add(head);
+    const color=id==='user'?'#728578':'#9d796e';
+    block(-.105,-.06,.47,.21,.12,.33,color,body);
+    const legs=[-.065,.02].map(x=>block(x,-.04,.05,.05,.08,.43,color,body));
+    for(const x of [-.15,.10]) block(x,-.034,.43,.05,.068,.34,color,body);
+    const face=new T.Mesh(new T.SphereGeometry(.07,10,8),material(color));
+    head.add(face);
+    const forward=new T.ArrowHelper(new T.Vector3(0,0,-1),new T.Vector3(0,.48,0),.32,0xe0a96b);
+    const gaze=new T.ArrowHelper(new T.Vector3(0,0,-1),new T.Vector3(),.42,0xa3d5c3);
+    body.add(forward,gaze);
+    root.traverse(object=>object.userData.ignorePick=true);
+    return {root,body,head,legs,forward,gaze};
+  });
+  const gazeVector=new T.Vector3();
+  function render(state,w,h,{selected,markers=true}={}) {
+    const c=effectiveCamera(state), hour=state.timeOfDay;
     if(canvas.clientWidth!==w || canvas.clientHeight!==h) return;
     const ratio=renderer.getPixelRatio();
     if(canvas.width!==Math.floor(w*ratio)||canvas.height!==Math.floor(h*ratio)) renderer.setSize(w,h,false);
@@ -295,14 +371,19 @@ function createApartment(canvas) {
     const transit=Math.max(0,Math.min(1,(hour-5.5)/14));
     if(day<.37) scene.background.copy(nightSky).lerp(duskSky,day/.37);
     else scene.background.copy(duskSky).lerp(daySky,(day-.37)/.63);
+    const [,,mix,brightness,density]=weatherProfiles[state.weather];
+    scene.background.lerp(weatherColors[state.weather],mix*(.25+.75*day));
+    fog.color.copy(scene.background);fog.density=density;
+    rain.visible=state.weather==='rainy';snow.visible=state.weather==='snowy';
+    ground.material.color.set(state.weather==='snowy'?'#dce7ee':state.weather==='rainy'?'#494d4b':'#646557');
     ambient.color.copy(nightTint).lerp(dayTint,day);
-    ambient.intensity=.24+1.28*day;
+    ambient.intensity=.24+1.28*day*brightness;
     sun.position.set(10*Math.cos(transit*Math.PI),3+8*day,-6);
-    sun.intensity=day*.85;
+    sun.intensity=day*.85*brightness;
     sun.color.copy(warmSun).lerp(coolSun,day);
     litPane.emissiveIntensity=(1-day)**3*.36;
     for(const [key,light,east] of fills){
-      light.intensity=day*(east?7*(1-transit)+1.5:4.7)*(state.curtains[key]?.19:1);
+      light.intensity=brightness*day*(east?7*(1-transit)+1.5:4.7)*(state.curtains[key]?.19:1);
       light.color.copy(warmSun).lerp(dayTint,day);
     }
     for(const [key,,,,,,power] of lightDefinitions){
@@ -326,7 +407,31 @@ function createApartment(canvas) {
       screen.material.needsUpdate=true;
     }
     screen.material.emissiveIntensity=state.televisionOn?.48:0;
+    selection.visible=Boolean(selected);
+    if(selected) selection.setFromObject(furnishings[selected]);
+    for(const [id,m] of Object.entries(state.characters)){
+      const {root,body,head,legs,forward,gaze}=proxies[id];
+      root.visible=markers && m.visible && state.perspective!==id;
+      root.position.set(m.x,m.z,m.y);root.rotation.y=-m.yaw;
+      root.scale.setScalar(m.height);
+      const sitting=m.posture==='sitting', lying=m.posture==='lying';
+      body.position.set(0,lying?.10:sitting?-.48:0,lying?.92:0);
+      body.rotation.x=lying?-Math.PI/2:0;
+      legs.forEach(leg=>{
+        leg.position.y=sitting?.56:.265;
+        leg.position.z=sitting?-.16:0;
+        leg.rotation.x=sitting?Math.PI/2:0;
+      });
+      head.position.set(0,sitting?.90:lying?.92:.94,0);
+      head.rotation.set(m.headPitch,-m.headYaw,0,'YXZ');
+      forward.visible=gaze.visible=m.guides;
+      gaze.position.copy(head.position);
+      const yaw=m.headYaw+m.gazeYaw,pitch=m.headPitch+m.gazePitch;
+      gazeVector.set(Math.sin(yaw)*Math.cos(pitch),Math.sin(pitch),-Math.cos(yaw)*Math.cos(pitch));
+      if(lying) gazeVector.applyAxisAngle(new T.Vector3(1,0,0),Math.PI/2);
+      gaze.setDirection(gazeVector.normalize());
+    }
     renderer.render(scene,camera);
   }
-  return {render};
+  return {render,pick};
 }

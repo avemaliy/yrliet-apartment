@@ -1,7 +1,13 @@
 # Changelog
 
-## Unreleased
+## 1.1.0 — Scene Studio
 
+- Introduced a full-viewport mobile studio with accessible three-position controls and three interaction modes.
+- Added viewport taps and long presses for household objects, plus furniture selection highlighting and undo/redo.
+- Added fictional weather, scene dates, custom lighting presets, and camera-room prioritization.
+- Added poseable character proxies, furniture anchors, independent head and gaze controls, and character POVs.
+- Added scene rename, duplicate and update actions and a share package with clean PNG, schema 2 JSON and a copyable scene reference.
+- Migrated schema 1 snapshots using the existing local storage key.
 - Grouped lighting controls into collapsible room sections with room-wide switches and locally remembered expansion. Individual controls and presets remain available.
 
 ## 1.0.0

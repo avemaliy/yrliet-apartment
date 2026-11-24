@@ -3,40 +3,56 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Yrliet — Apartment v1.0</title>
+<title>Yrliet — Apartment v1.1</title>
 <link rel="stylesheet" href="style.css">
 <script defer src="https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.min.js"></script>
 <script defer src="geometry.js"></script>
 <script defer src="state.js"></script>
 <script defer src="render.js"></script>
 <script defer src="app.js"></script>
+<script defer src="studio.js"></script>
 </head>
 <body>
 <main>
-<h1>Yrliet Apartment</h1>
+<header id="top"><strong id="room"></strong><span id="topTime"></span><span id="topWeather"></span>
+<label><span class="sr">Tryb interakcji</span><select id="mode"><option value="explore">Eksploracja</option><option value="interior">Wnętrza</option><option value="director">Reżyseria</option></select></label>
+<button id="settings" aria-label="Ustawienia" aria-expanded="false">⚙</button></header>
 <div id="view">
   <div id="frame"><canvas id="c" aria-label="Widok mieszkania 3D"></canvas><div id="grid" hidden></div></div>
   <div id="photoTools" hidden><button id="exitPhoto">Pokaż sterowanie</button><button id="photoSave">Zapisz PNG</button></div>
   <p id="renderError" role="alert" hidden></p>
 </div>
-<div id="controls">
+<div id="viewportTools">
   <div class="movement" aria-label="Ruch">
-    <button data-m="0">Przód</button><button data-m="-1">Lewo</button><button data-m="1">Prawo</button><button data-m="2">Tył</button>
-    <button id="enterPhoto">Tryb zdjęcia</button>
+    <button data-m="-1" aria-label="Lewo">←</button><button data-m="0" aria-label="Przód">↑</button><button data-m="2" aria-label="Tył">↓</button><button data-m="1" aria-label="Prawo">→</button>
   </div>
-  <details><summary>Nawigacja</summary>
-    <p>Przeciągnij widok, aby się rozglądać. Na komputerze użyj WASD lub strzałek.</p>
-    <canvas id="map" width="328" height="336" aria-label="Plan mieszkania"></canvas>
-    <div id="presets"></div>
-  </details>
-  <details><summary>Światło</summary>
+  <div class="tools">
+    <button id="previous" aria-label="Poprzednie położenie">↶</button><button id="mapToggle" aria-expanded="false">Plan</button><button id="enterPhoto">Zdjęcie</button>
+  </div>
+  <div id="navigation" hidden><canvas id="map" width="328" height="336" aria-label="Plan mieszkania"></canvas><div id="presets"></div></div>
+  <div id="context" hidden></div>
+</div>
+<div id="controls" data-level="0">
+  <div id="sheetGrip"><button id="lower" aria-label="Zwiń panel">−</button><span aria-hidden="true"></span><button id="raise" aria-label="Rozwiń panel">+</button></div>
+  <nav id="tabs" aria-label="Studio">
+    <button data-tab="lighting">Światło</button><button data-tab="atmosphere">Atmosfera</button>
+    <button data-tab="camera">Aparat</button><button data-tab="director">Reżyseria</button><button data-tab="scenes">Sceny</button>
+  </nav>
+  <div id="panels">
+  <section id="lighting" data-panel><h2>Światło</h2><div id="lightingPresets"></div><div id="lights"></div></section>
+  <section id="atmosphere" data-panel hidden><h2>Atmosfera</h2>
+    <label>Pogoda <select id="weather"></select></label>
+    <label>Data sceny <input id="sceneDate" type="date"></label>
+    <div id="timePresets"></div>
     <label>Pora dnia <input id="light" type="range" min="0" max="23.75" step=".25"><output id="clock"></output></label>
-    <div id="lightingPresets"></div><div id="lights"></div>
-  </details>
-  <details><summary>Drzwi, okna i wyposażenie</summary><div id="switches"></div>
+  </section>
+  <section id="settingsPanel" data-panel hidden><h2>Ustawienia</h2><details open><summary>Drzwi, okna i wyposażenie</summary><div id="switches"></div>
     <button id="sofa"></button><button id="tv"></button>
   </details>
-  <details><summary>Aparat i kompozycja</summary>
+  </section>
+  <section id="camera" data-panel hidden><h2>Aparat i kompozycja</h2>
+    <label>Perspektywa <select id="perspective"></select></label>
+    <div id="precision"></div>
     <label>Wysokość <input id="eye" type="range" min=".3" max="2" step=".01"><output id="ev"></output></label>
     <label>Pionowe pole widzenia <input id="fov" type="range" min="30" max="100" step="1"><output id="fv"></output></label>
     <div id="heights"></div>
@@ -46,20 +62,27 @@
     <p id="status"></p>
     <label>Nazwa ujęcia <input id="bookmarkName" maxlength="64"></label><button id="addBookmark">Zapisz ujęcie</button>
     <select id="bookmarks" aria-label="Zapisane ujęcia"></select><button id="loadBookmark">Wczytaj ujęcie</button><button id="deleteBookmark">Usuń ujęcie</button>
-  </details>
-  <details><summary>Ustawienie mebli</summary>
+  </section>
+  <section id="interior" data-panel hidden><h2>Ustawienie mebli</h2>
     <label>Przedmiot <select id="furniture"></select></label>
     <div id="editActions"></div>
     <button id="resetFurniture">Przywróć położenie</button>
-  </details>
-  <details><summary>Zapis i wymiana scen</summary>
+    <button id="undo">Cofnij</button><button id="redo">Ponów</button>
+  </section>
+  <section id="director" data-panel hidden><h2>Postacie</h2><div id="characters"></div></section>
+  <section id="scenes" data-panel hidden><h2>Zapis i wymiana scen</h2>
+    <button id="prepareShare">Share Scene with Yrliet</button><label><input id="includeMarkers" type="checkbox" checked> Postacie na zdjęciu</label>
+    <div id="shareActions" hidden><button id="nativeShare">Udostępnij pliki</button><button id="sharePNG">Pobierz PNG</button><button id="shareJSON">Pobierz scenę JSON</button></div>
     <label>Nazwa sceny <input id="sceneName" maxlength="80"></label><button id="store">Zapisz scenę</button>
     <select id="slots" aria-label="Zapisane sceny"></select><button id="restore">Wczytaj scenę</button><button id="deleteSlot">Usuń scenę</button>
+    <div id="slotActions"></div>
+    <button id="previewSlot">Podgląd zapisanej sceny</button><img id="slotPreview" width="144" alt="" hidden>
     <div><button id="export">Eksportuj JSON</button><button id="import">Importuj JSON</button><input id="file" type="file" accept=".json,application/json" hidden><button id="reset">Przywróć mieszkanie</button></div>
     <label>Opis sceny <textarea id="summary" rows="5" readonly></textarea></label><button id="copy">Kopiuj opis</button>
-  </details>
-  <p id="notice" role="status"></p>
+  </section>
+  </div>
 </div>
+<p id="notice" role="status"></p>
 </main>
 </body>
 </html>

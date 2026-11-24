@@ -2,22 +2,28 @@
 
 A browser-based 3D apartment in Kraków for visual continuity, interiors and photographic reference. [Open the GitHub Pages app](https://avemaliy.github.io/yrliet-apartment/).
 
-## Use
+## Scene Studio
 
-- Drag the view to look around. Use the movement buttons, WASD or arrow keys to walk. The plan and room buttons jump to a viewpoint.
-- Use **Światło** for time and fixtures. Lighting presets change the time and which fixtures are switched on. They retain each fixture’s intensity and temperature.
-- Use **Drzwi, okna i wyposażenie** to operate doors, windows, curtains, sofa bed and TV.
-- In **Aparat i kompozycja**, set eye height, vertical field of view and crop. Save camera bookmarks or turn on the composition grid. **Tryb zdjęcia** fills the browser viewport. Tap the canvas to show or hide the photography buttons. PNG records the rendered frame with no interface or grid.
-- In **Ustawienie mebli**, select a rug, dining chair or vase. Move in 10 cm steps, rotate in 15° steps, or reset the item. Chairs stay in the kitchen, the vase stays on the table, and rugs stay in their rooms.
-- **Zapis i wymiana scen** can save up to 40 named snapshots, import or export the active scene, reset the active scene, and copy a readable summary. The current scene autosaves locally. Export JSON to transfer a scene to another device or share it with a screenshot.
+- In **Eksploracja**, drag to look around, use the arrows or WASD to walk, and open **Plan** for room viewpoints. Tap an object to use it or hold it to open its context controls. Settings also offers doors, windows, curtains, the sofa bed and TV.
+- In **Wnętrza**, tap or choose editable furniture, move it in 10 cm steps, or rotate it in 15° steps. Reset a single item or use undo and redo. Room and table limits continue to apply.
+- In **Reżyseria**, place either proxy on the floor or choose the sofa, a dining chair, or Yrliet’s bed. Adjust posture, position, height, body, head and gaze. Enable direction guides when needed.
+- Use **Światło** for room switches and individual fixture controls. The camera’s room comes first. Save lighting presets with optional time and weather. **Atmosfera** controls the fictional date, time and weather independently.
+- In **Aparat**, choose independent or character POV, adjust the framing and field of view, and use the thirds grid and independent camera bookmarks. Character height and posture-specific eye offsets control the height of character POVs. **Zdjęcie** enters a clean browser-viewport view. Tap the frame to toggle its controls.
+- Tap a studio tab to open its sheet. Swipe its grip or use the minus and plus buttons to collapse, half-open or expand it.
+
+## Scenes and sharing
+
+Use **Sceny** to save, rename, duplicate, preview, update, delete, import or export complete snapshots. Restore the default apartment to reset the active scene. Named scenes and the current scene remain in browser local storage. Use JSON to move a scene to another device.
+
+**Share Scene with Yrliet** prepares a clean PNG, versioned JSON and copyable reference text from the same snapshot. Choose whether to include character markers in the image before preparing it. Use the device share sheet where available, or download the files and copy the text. The app has no external service for sharing.
 
 ## Scene format
 
-Schema version 1 uses a readable JSON object. `appVersion` identifies the producer and `schemaVersion` identifies the file structure. The current app emits `1.0.0`. Camera plan coordinates and height are in metres. Yaw and pitch are in radians, with yaw zero facing north, increasing clockwise. Positive pitch looks up. `verticalFov` is in degrees. Framing is `landscape` (4:3), `portrait` (3:4) or `square` (1:1).
+The app writes `appVersion: "1.1.0"` and `schemaVersion: 2`. Schema 1 snapshots migrate to sunny weather, no simulated date, independent camera and two hidden default markers. The v0.5 migration remains available, and the local storage key is unchanged.
 
-`timeOfDay` is hours on a 24-hour clock. Lights store on/off, a multiplier (0–2) and kelvin by fixture ID. Doors and windows store open booleans. Curtain booleans are true when drawn across the window. Modified furniture stores absolute x/y in metres, plus Three.js y-axis rotation in radians. `seatedOnSofa` marks the explicit sofa collision exception. Scene data includes the sofa, TV and camera bookmarks. All coordinates are independent of the device's screen size.
+All existing fixture, furniture and room identifiers and the original camera, lighting and prop fields are retained. Camera x and y are plan coordinates in metres. Camera height is above the floor. A character’s z is the height of its placement anchor, such as a seat. Yaw is in radians, clockwise from north. Character head and gaze angles are offsets from the body and head respectively. Positive pitch looks up. Vertical FOV is in degrees. Framing is `landscape` (4:3), `portrait` (3:4) or `square` (1:1).
 
-The app validates schema, ranges, IDs and physical positions before applying an import. Legacy v0.5 saves are migrated, with an approximate vertical FOV based on the current viewport and an adjacent free position when a new collider occupies the original position. The old browser storage entry is left available during migration.
+The `camera` field retains the independent pose and framing. The active character eye pose is derived from the selected perspective, posture and eye offset. Share JSON adds reference metadata with the exact derived pose and numeric aspect ratio. Normal import restores the underlying scene. The app validates scene fields and collision for the independent camera before applying a snapshot. Scene previews are rendered on demand and remain outside browser storage.
 
 ## Development and deployment
 
@@ -26,7 +32,14 @@ Start a static HTTP server from the repository root, for example `python -m http
 - `geometry.js` defines the retained floor plan and static furnishings.
 - `render.js` builds the scene, manages dynamic props, and renders on demand. It batches static geometry and courtyard details by material and caps pixel ratio at 1.5 for mobile GPUs.
 - `state.js` defines stable IDs, defaults, schema validation and migration.
-- `app.js` handles collision, camera controls, layout, editor and persistence.
+- `app.js` handles collision, navigation, scene interaction and persistence.
+- `studio.js` manages the sheet, authoring tools and portable share package.
 - `index.html` and `style.css` define the Polish-language interface.
 
 The existing GitHub Pages deployment serves the repository root. There is no build step or database. Open a pull request to review source changes before merging to the publication branch. See [AGENTS.md](AGENTS.md), [APARTMENT.md](APARTMENT.md), [ROADMAP.md](ROADMAP.md) and [CHANGELOG.md](CHANGELOG.md).
+
+## Verification
+
+Run the schema and camera regression checks with `node tests/state.test.cjs`. For a browser smoke check, use a touch-enabled mobile viewport, change sheet positions with both the grip and buttons, and switch all interaction modes with a scene already composed. Exercise room lights, weather, direct object gestures, furniture history, character anchors and both POVs. Save and reload a named scene, test a schema 1 import, then download the PNG and JSON from a prepared share.
+
+The release was exercised in Chromium with simulated mobile touch and software WebGL. Actual iPhone Safari layout and gestures, memory and WebGL context recovery, physical mobile GPU performance, and the iOS share sheet still require device verification.
