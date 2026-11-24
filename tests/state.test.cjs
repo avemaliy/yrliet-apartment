@@ -62,3 +62,32 @@ test('invalid director fields and unknown versions are rejected',()=>{
   scene.characters.user.eyeOffsets.lying = 3;
   assert.throws(()=>validateScene(scene),/eyeOffsets/);
 });
+
+test('missing exposure defaults to neutral and valid camera exposure survives a scene round trip',()=>{
+  const { defaultScene, validateScene } = loadState();
+  for(const schemaVersion of [1,2]){
+    const legacy=defaultScene();
+    legacy.schemaVersion=schemaVersion;
+    delete legacy.exposure;
+    assert.equal(JSON.stringify(validateScene(legacy).exposure),'{"ev":0,"automatic":false}');
+  }
+  const scene=defaultScene();
+  scene.exposure={ev:-1.35,automatic:true};
+  assert.equal(JSON.stringify(validateScene(JSON.parse(JSON.stringify(scene))).exposure),
+    JSON.stringify(scene.exposure));
+  for(const exposure of [null,{ev:2.1,automatic:false},{ev:-2.1,automatic:false},{ev:0,automatic:'on'}]){
+    assert.throws(()=>validateScene({...scene,exposure}),/exposure/);
+  }
+});
+
+test('v0.5 snapshots retain camera and fixture state and use neutral exposure',()=>{
+  const { validateScene } = loadState();
+  const legacy={X:6.5,Y:7.82,A:1,P:.1,eye:1.2,fov:75,hour:9,
+    lampOn:[true,false,false,false,false,false],
+    doors:[true,true,true,true,false],unfolded:false};
+  const scene=validateScene(legacy);
+  assert.equal(scene.camera.x,legacy.X);
+  assert.equal(scene.camera.yaw,legacy.A);
+  assert.equal(scene.lights.kitchen.on,true);
+  assert.equal(JSON.stringify(scene.exposure),'{"ev":0,"automatic":false}');
+});
