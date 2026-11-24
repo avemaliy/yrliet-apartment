@@ -1,4 +1,4 @@
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 const SAVE_KEY = 'yrliet-apartment-v1';
 const TAU = Math.PI * 2;
 const frames = {landscape: 4/3, portrait: 3/4, square: 1};
@@ -36,9 +36,31 @@ const keysFor = (definitions) => definitions.map(([key]) => key);
 const wrapAngle = (angle) => ((angle % TAU) + TAU) % TAU;
 const clone = (value) => JSON.parse(JSON.stringify(value));
 
+const weatherProfiles = {
+  sunny:['Słonecznie','#afcfdf',0,1,0], overcast:['Pochmurno','#8f9ba5',.65,.62,.018],
+  rainy:['Deszcz','#596a7b',.72,.42,.043], snowy:['Śnieg','#dce7ee',.65,.81,.05],
+  foggy:['Mgła','#aeb7b8',.76,.55,.14],
+};
+const postures = {standing:.94, sitting:.42, lying:.10};
+const characterNames = {user:'Ty',yrliet:'Yrliet'};
+const perspectives = {independent:'Niezależny',user:'POV użytkownika',yrliet:'POV Yrliet'};
+function defaultCharacter(id) {
+  return {x:id==='user'?1.85:5.75,y:3,z:0,height:1.7,yaw:0,headYaw:0,headPitch:0,
+    gazeYaw:0,gazePitch:0,posture:'standing',visible:false,guides:false,
+    eyeOffsets:{standing:0,sitting:0,lying:0}};
+}
+
+function effectiveCamera(state) {
+  const c=state.camera, marker=state.characters[state.perspective];
+  if(!marker) return c;
+  return {...c,x:marker.x,y:marker.y,height:marker.z+marker.height*postures[marker.posture]+marker.eyeOffsets[marker.posture],
+    yaw:wrapAngle(marker.yaw+marker.headYaw),pitch:marker.headPitch};
+}
+
 function defaultScene() {
   return {
-    schemaVersion:1, appVersion:VERSION, name:'Mieszkanie', timeOfDay:8,
+    schemaVersion:2, appVersion:VERSION, name:'Mieszkanie', timeOfDay:8,
+    weather:'sunny',date:'',perspective:'independent',characters:keyed(Object.keys(characterNames),defaultCharacter),
     camera:{x:6.50, y:7.82, yaw:0, pitch:0, height:1.2, verticalFov:75, framing:'landscape', grid:false, seatedOnSofa:false},
     lights:Object.fromEntries(lightDefinitions.map(([key,,,,,kelvin]) => [key,{on:false,intensity:1,kelvin}])),
     doors:keyed(keysFor(doorDefinitions), key => key !== 'entry'),
@@ -93,7 +115,7 @@ function validateScene(input) {
     legacy.sofaUnfolded = t.unfolded;
     t = legacy;
   }
-  if (t.schemaVersion !== 1) bad('schemaVersion');
+  if (![1,2].includes(t.schemaVersion)) bad('schemaVersion');
   name(t.appVersion,32,'appVersion');
   const scene = defaultScene();
   scene.name = name(t.name,80,'name');
@@ -122,5 +144,26 @@ function validateScene(input) {
     const b = record(item,'bookmark');
     return {name:name(b.name,64,'bookmark.name'), camera:camera(b.camera,'bookmark.camera')};
   });
+  if(t.schemaVersion===2){
+    for(const [field,choices] of [['weather',weatherProfiles],['perspective',perspectives]]){
+      if(!Object.prototype.hasOwnProperty.call(choices,t[field])) bad(field);
+      scene[field]=t[field];
+    }
+    if(typeof t.date!=='string' || (t.date && (!/^\d{4}-\d{2}-\d{2}$/.test(t.date) ||
+      new Date(t.date).toJSON()?.slice(0,10)!==t.date))) bad('date');
+    scene.date=t.date;
+    for(const id of Object.keys(characterNames)){
+      const m=record(record(t.characters,'characters')[id],id);
+      if(!Object.prototype.hasOwnProperty.call(postures,m.posture)) bad(id+'.posture');
+      const marker={posture:m.posture,visible:bool(m.visible,id+'.visible'),guides:bool(m.guides,id+'.guides')};
+      for(const [key,min,max] of [['x',.2,8],['y',.2,8.2],['z',0,1.2],['height',.8,2.1],
+        ['yaw',0,TAU],['headYaw',-Math.PI,Math.PI],['headPitch',-1.45,1.45],
+        ['gazeYaw',-Math.PI,Math.PI],['gazePitch',-1.45,1.45]]){
+        marker[key]=number(m[key],min,max,id+'.'+key);
+      }
+      marker.eyeOffsets=keyed(Object.keys(postures),key=>number(record(m.eyeOffsets,id+'.eyeOffsets')[key],-.08,.35,id+'.eyeOffsets.'+key));
+      scene.characters[id]=marker;
+    }
+  }
   return scene;
 }

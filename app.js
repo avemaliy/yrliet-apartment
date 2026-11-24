@@ -7,9 +7,15 @@ let slots = Object.create(null);
 let engine;
 let pendingFrame;
 let saveTimer;
+let mode='explore', previousCamera, selectedFurniture;
+let studioSync=()=>{}, studioDraw=()=>{}, onViewportTap=()=>{};
+let undoStack=[], redoStack=[];
+const objectActions=new Map();
 
 function notice(message) {
   $('notice').textContent=message;
+  clearTimeout(notice.timer);
+  notice.timer=setTimeout(()=>$('notice').textContent='',4500);
 }
 function inside(x,y) {
   return x>=.2 && x<=8 && y>=.2 && y<=8.2;
@@ -121,7 +127,8 @@ function summaryText() {
     ' m, y='+item.y.toFixed(2)+' m, obrót='+(-item.rotation*180/Math.PI).toFixed(1)+'°');
   return [
     state.name+' · Yrliet Apartment '+VERSION+' · Nowy Kleparz, Kraków',
-    'Pora: '+formatTime(state.timeOfDay)+' · Aparat: '+cameraText(state.camera),
+    'Pora: '+formatTime(state.timeOfDay)+
+      (state.perspective==='independent'?'':' · Zapisany aparat niezależny: '+cameraText(state.camera)),
     'Światła: '+(lights.join(', ')||'wyłączone'),
     'Otwarte drzwi: '+list(state.doors,Object.fromEntries(doorDefinitions.map(([key,label])=>[key,label])),true),
     'Otwarte okna: '+list(state.windows,windowNames,true)+' · zasłonięte okna: '+list(state.curtains,windowNames,true),
@@ -142,7 +149,7 @@ function drawMap() {
     ctx.save();ctx.translate(item.x*40,item.y*40);ctx.rotate(-item.rotation);
     ctx.fillRect(-w*20,-d*20,w*40,d*40);ctx.restore();
   }
-  const {x,y,yaw}=state.camera;
+  const {x,y,yaw}=effectiveCamera(state);
   ctx.strokeStyle='#795f46';ctx.lineWidth=2;
   for(const [key,,a,b,axis,w] of doorDefinitions) {
     const angle=doorAngle(key,axis,state.doors[key]);
@@ -163,12 +170,13 @@ function draw() {
   const units=Math.floor(Math.min(view.clientWidth/baseWidth,view.clientHeight/baseHeight));
   const width=units*baseWidth, height=units*baseHeight;
   frame.style.width=width+'px'; frame.style.height=height+'px';
-  $('grid').hidden=!state.camera.grid;
-  if(width>0 && height>0 && engine && !contextLost) engine.render(state,width,height);
-  $('status').textContent=cameraText(state.camera);
+  $('grid').hidden=!state.camera.grid || document.body.classList.contains('photo');
+  if(width>0 && height>0 && engine && !contextLost) engine.render(state,width,height,{selected:mode==='interior' && !document.body.classList.contains('photo') ? selectedFurniture : undefined});
+  studioDraw();
+  $('status').textContent=cameraText(effectiveCamera(state));
   $('summary').value=summaryText();
   $('clock').textContent=formatTime(state.timeOfDay);
-  $('ev').textContent=state.camera.height.toFixed(2)+' m';
+  $('ev').textContent=effectiveCamera(state).height.toFixed(2)+' m';
   $('fv').textContent=state.camera.verticalFov+'°';
 }
 function jump(camera) {
@@ -176,12 +184,16 @@ function jump(camera) {
     notice('To ujęcie koliduje z wyposażeniem lub drzwiami.');
     return;
   }
+  if(state.perspective==='independent') previousCamera=clone(state.camera);
+  state.perspective='independent';
   state.camera=clone(camera);
   syncControls();
   refresh();
 }
 function move(direction) {
+  if(state.perspective!=='independent') return;
   const c=state.camera;
+  const previous=clone(c);
   const a=c.yaw+direction*Math.PI/2;
   for(let step=0;step<3;step++) {
     const x=c.x+Math.sin(a)*.06,y=c.y-Math.cos(a)*.06;
@@ -189,6 +201,7 @@ function move(direction) {
     Object.assign(c,{x,y});
     if(c.seatedOnSofa && !blocked(x,y,state)) c.seatedOnSofa=false;
   }
+  if(c.x!==previous.x || c.y!==previous.y) previousCamera=previous;
   refresh();
 }
 map.onclick=e=>{
@@ -208,26 +221,47 @@ for(const [name,x,y,yaw,height,seatedOnSofa=false] of presets){
 }
 document.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>move(Number(b.dataset.m)));
 let pointer;
+function endPointer() {
+  clearTimeout(pointer?.timer);
+  pointer=null;
+}
+canvas.oncontextmenu=e=>e.preventDefault();
 canvas.onpointerdown=e=>{
-  if(pointer) return;
-  pointer={id:e.pointerId,x:e.clientX,y:e.clientY,distance:0};
+  if(pointer || e.button!==0) return;
+  const start={id:e.pointerId,x:e.clientX,y:e.clientY,drag:false,held:false};
+  pointer=start;
   canvas.setPointerCapture(e.pointerId);
+  start.timer=setTimeout(()=>{
+    start.held=true;
+    if(!document.body.classList.contains('photo')) onViewportTap(start.x,start.y,true);
+  },500);
 };
 canvas.onpointermove=e=>{
-  if(!pointer || pointer.id!==e.pointerId) return;
+  if(!pointer || pointer.id!==e.pointerId || pointer.held) return;
   const dx=e.clientX-pointer.x,dy=e.clientY-pointer.y;
-  pointer.distance+=Math.abs(dx)+Math.abs(dy);
+  if(!pointer.drag && Math.hypot(dx,dy)<7) return;
+  pointer.drag=true;
+  clearTimeout(pointer.timer);
   pointer.x=e.clientX;pointer.y=e.clientY;
-  state.camera.yaw=wrapAngle(state.camera.yaw+dx*.006);
-  state.camera.pitch=Math.max(-1.45,Math.min(1.45,state.camera.pitch+dy*.005));
+  if(state.perspective==='independent'){
+    state.camera.yaw=wrapAngle(state.camera.yaw+dx*.006);
+    state.camera.pitch=Math.max(-1.45,Math.min(1.45,state.camera.pitch+dy*.005));
+  } else {
+    const m=state.characters[state.perspective];
+    m.headYaw=Math.max(-Math.PI,Math.min(Math.PI,m.headYaw+dx*.006));
+    m.headPitch=Math.max(-1.45,Math.min(1.45,m.headPitch+dy*.005));
+  }
   refresh();
 };
 canvas.onpointerup=e=>{
   if(pointer?.id!==e.pointerId) return;
-  if(pointer.distance<5 && document.body.classList.contains('photo')) $('photoTools').hidden=!$('photoTools').hidden;
-  pointer=null;
+  const tap=!pointer.drag && !pointer.held && Math.hypot(e.clientX-pointer.x,e.clientY-pointer.y)<7;
+  endPointer();
+  if(!tap) return;
+  if(document.body.classList.contains('photo')) $('photoTools').hidden=!$('photoTools').hidden;
+  else onViewportTap(e.clientX,e.clientY,false);
 };
-canvas.onpointercancel=canvas.onlostpointercapture=()=>pointer=null;
+canvas.onpointercancel=canvas.onlostpointercapture=endPointer;
 window.addEventListener('keydown',e=>{
   if(e.key==='Escape' && document.body.classList.contains('photo')) { photoMode(false); return; }
   if(e.target.closest?.('input,select,textarea,button,[contenteditable]')||e.metaKey||e.ctrlKey||e.altKey) return;
@@ -235,7 +269,11 @@ window.addEventListener('keydown',e=>{
   if(typeof k==='number'){e.preventDefault();move(k);}
 });
 for(const [id,field] of [['eye','height'],['fov','verticalFov']]){
-  $(id).oninput=()=>{state.camera[field]=Number($(id).value);refresh();};
+  $(id).oninput=()=>{
+    const marker=state.characters[state.perspective];
+    if(field==='height' && marker) return;
+    state.camera[field]=Number($(id).value);refresh();
+  };
 }
 $('light').oninput=()=>{state.timeOfDay=Number($('light').value);refresh();};
 $('aspect').onchange=()=>{state.camera.framing=$('aspect').value;refresh();};
@@ -297,6 +335,7 @@ for(const [key,label] of lightDefinitions) {
   legend.textContent=label;group.append(legend);
   roomLightControls.find(room => room.keys.includes(key)).fixtures.append(group);
   const toggle=button(group,'Wyłączone',()=>{state.lights[key].on=!state.lights[key].on;syncControls();refresh();});
+  objectActions.set('lights:'+key,{el:toggle,name:label});
   toggle.setAttribute('aria-label',label);
   function range(title,field,min,max,step) {
     const label=document.createElement('label'), input=document.createElement('input'), out=document.createElement('output');
@@ -319,7 +358,8 @@ for(const [label,hour,enabled] of [['Rano',8,[]],['Popołudnie',14,[]],['Wieczó
   });
 }
 const toggles=[];
-function interaction(el,label,read,change,collision=false){
+function interaction(el,label,read,change,collision=false,id){
+  if(id) objectActions.set(id,{el});
   el.onclick=()=>{
     change();
     const c=state.camera;
@@ -333,16 +373,16 @@ function interaction(el,label,read,change,collision=false){
 for(const [key,label] of doorDefinitions) {
   interaction(button($('switches'),''),
     open=>'Drzwi · '+label+' · '+(open?'otwarte':'zamknięte'),
-    ()=>state.doors[key],()=>state.doors[key]=!state.doors[key],true);
+    ()=>state.doors[key],()=>state.doors[key]=!state.doors[key],true,'doors:'+key);
 }
 for(const [key,label] of Object.entries(windowNames)){
   interaction(button($('switches'),''),open=>'Okno · '+label+' · '+(open?'otwarte':'zamknięte'),
-    ()=>state.windows[key],()=>state.windows[key]=!state.windows[key]);
+    ()=>state.windows[key],()=>state.windows[key]=!state.windows[key],false,'windows:'+key);
   interaction(button($('switches'),''),closed=>'Zasłony · '+label+' · '+(closed?'zasłonięte':'odsłonięte'),
-    ()=>state.curtains[key],()=>state.curtains[key]=!state.curtains[key]);
+    ()=>state.curtains[key],()=>state.curtains[key]=!state.curtains[key],false,'curtains:'+key);
 }
-interaction($('sofa'),open=>open?'Złóż kanapę':'Rozłóż kanapę',()=>state.sofaUnfolded,()=>state.sofaUnfolded=!state.sofaUnfolded,true);
-interaction($('tv'),on=>on?'Wyłącz telewizor':'Włącz telewizor',()=>state.televisionOn,()=>state.televisionOn=!state.televisionOn);
+interaction($('sofa'),open=>open?'Złóż kanapę':'Rozłóż kanapę',()=>state.sofaUnfolded,()=>state.sofaUnfolded=!state.sofaUnfolded,true,'sofa:sofa');
+interaction($('tv'),on=>on?'Wyłącz telewizor':'Włącz telewizor',()=>state.televisionOn,()=>state.televisionOn=!state.televisionOn,false,'tv:tv');
 for(const [key,[label]] of Object.entries(editable)) option($('furniture'),key,label);
 for(const [label,x,y,turn] of [['Północ',0,-.10,0],['Południe',0,.10,0],['Zachód',-.10,0,0],['Wschód',.10,0,0],['Obróć w lewo',0,0,Math.PI/12],['Obróć w prawo',0,0,-Math.PI/12]]){
   button($('editActions'),label,()=>{
@@ -350,7 +390,8 @@ for(const [label,x,y,turn] of [['Północ',0,-.10,0],['Południe',0,.10,0],['Zac
     place(key,{x:item.x+x,y:item.y+y,rotation:wrapAngle(item.rotation+turn)});
   });
 }
-function place(key,item) {
+function place(key,item,record=true) {
+  if(mode!=='interior') return false;
   const previous=state.furniture[key];
   if(item && !canPlace(key,item,state)) {notice('Przedmiot musi pozostać w swoim pomieszczeniu lub na blacie.');return;}
   if(item) state.furniture[key]=item;
@@ -361,7 +402,9 @@ function place(key,item) {
     else delete state.furniture[key];
     notice('Odsuń aparat przed zmianą.');return;
   }
-  notice(item?'Zmieniono położenie.':'Przywrócono położenie.');refresh();
+  if(record){undoStack.push({key,before:previous,after:item});redoStack=[];}
+  notice(item?'Zmieniono położenie.':'Przywrócono położenie.');studioSync();refresh();
+  return true;
 }
 $('resetFurniture').onclick=()=>place($('furniture').value,null);
 
@@ -384,6 +427,7 @@ function syncControls() {
   for(const {el,label,read} of toggles){el.textContent=label(read());el.setAttribute('aria-pressed',read());}
   updateOptions($('bookmarks'),state.bookmarks.map((b,i)=>[String(i),b.name]));
   updateOptions($('slots'),Object.keys(slots).map(key=>[key,key]));
+  studioSync();
 }
 function updateOptions(select,items) {
   const old=select.value;
@@ -393,7 +437,7 @@ function updateOptions(select,items) {
   if(items.some(([key])=>key===old)) select.value=old;
 }
 function apply(data,message) {
-  state=verifyScene(data);syncControls();refresh();notice(message);
+  state=verifyScene(data);undoStack=[];redoStack=[];previousCamera=undefined;syncControls();refresh();notice(message);
 }
 $('sceneName').onchange=()=>{
   const name=$('sceneName').value.trim();
@@ -474,13 +518,19 @@ function screenshot() {
   if(!engine||contextLost){renderMessage('Eksport PNG wymaga aktywnego widoku WebGL.');return;}
   if(pendingFrame) cancelAnimationFrame(pendingFrame);
   draw();
-  try {download(canvas.toDataURL('image/png'),'Yrliet_POV.png');}
+  try {
+    engine.render(state,canvas.clientWidth,canvas.clientHeight);
+    download(canvas.toDataURL('image/png'),'Yrliet_POV.png');
+    refresh(false);
+  }
   catch {renderMessage('Nie udało się zapisać obrazu PNG.');}
 }
 $('save').onclick=$('photoSave').onclick=screenshot;
 function photoMode(active) {
+  $('context').hidden=true;
   document.body.classList.toggle('photo',active);
   $('photoTools').hidden=!active;
+  $('grid').hidden=active || !state.camera.grid;
   refresh(false);
 }
 $('enterPhoto').onclick=()=>photoMode(true);
